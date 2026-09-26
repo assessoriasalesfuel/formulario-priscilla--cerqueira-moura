@@ -12,7 +12,7 @@ import {
 const app = document.querySelector('#app');
 const attribution = captureAttribution();
 const initialAnswers = () => ({
-  name: '', phone: '', email: '', situation: '', concern: '', urgency: '', hiring: '',
+  name: '', phone: '', email: '', situation: '', income: '', pensionRange: '', urgency: '', hiring: '',
   dataConsent: false, contactConsent: false,
 });
 

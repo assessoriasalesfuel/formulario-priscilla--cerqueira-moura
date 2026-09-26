@@ -4,6 +4,7 @@ import { calculatePriority, classifyLead } from '../public/js/qualification.js';
 
 const qualifiedAnswers = {
   situation: 'protective_measure_received',
+  income: 'from_6000_to_10000',
   hiring: 'ready_to_hire',
   urgency: 'no_official_deadline',
   dataConsent: true,
@@ -12,6 +13,15 @@ const qualifiedAnswers = {
 
 test('classifica lead qualificado', () => {
   assert.equal(classifyLead(qualifiedAnswers).classification, 'qualified');
+});
+
+test('faixa de pensão não altera a qualificação', () => {
+  for (const pensionRange of ['not_paying', 'up_to_500', 'from_500_to_1500', 'above_1500']) {
+    assert.deepEqual(
+      classifyLead({ ...qualifiedAnswers, pensionRange }),
+      classifyLead(qualifiedAnswers),
+    );
+  }
 });
 
 test('classifica familiar como qualificado', () => {
@@ -29,6 +39,24 @@ test('desqualifica quem ainda está pesquisando', () => {
 
 test('desqualifica busca exclusiva por atendimento gratuito', () => {
   assert.equal(classifyLead({ ...qualifiedAnswers, hiring: 'free_only' }).classification, 'disqualified');
+});
+
+test('desqualifica renda de até R$ 3.000', () => {
+  assert.equal(classifyLead({ ...qualifiedAnswers, income: 'up_to_3000' }).classification, 'disqualified');
+});
+
+test('qualifica renda intermediária somente com urgência e contratação imediata', () => {
+  assert.equal(classifyLead({
+    ...qualifiedAnswers,
+    income: 'from_3000_to_6000',
+    urgency: 'deadline_7d',
+    hiring: 'ready_to_hire',
+  }).classification, 'qualified');
+  assert.equal(classifyLead({
+    ...qualifiedAnswers,
+    income: 'from_3000_to_6000',
+    urgency: 'no_official_deadline',
+  }).classification, 'disqualified');
 });
 
 test('calcula prioridade urgente', () => {
@@ -53,4 +81,3 @@ test('retorna objeto previsível com razão de urgência', () => {
     reason: 'Prazo ou situação urgente e disponibilidade para atendimento particular',
   });
 });
-

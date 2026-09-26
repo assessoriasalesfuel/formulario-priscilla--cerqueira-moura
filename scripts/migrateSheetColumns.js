@@ -2,11 +2,62 @@ import { google } from 'googleapis';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { LEAD_HEADERS } from '../server/leadSchema.js';
+import { DERIVED_VIEW_FORMULAS } from '../server/sheetViewFormulas.js';
 
 const EXPECTED_SPREADSHEET_ID = '1zzeazzXlD3XI1ZnTQoO9MX27DvqHlionTDPqhHA5UEA';
 const REQUIRED_SHEETS = ['Leads', 'Qualificados', 'Desqualificados', 'Visão geral'];
 
 export const FINAL_HEADERS = LEAD_HEADERS;
+
+export const PREVIOUS_HEADERS = Object.freeze([
+  'Lead ID',
+  'Data de criação',
+  'Status',
+  'Nome',
+  'WhatsApp',
+  'E-mail',
+  'Situação atual',
+  'Principal preocupação',
+  'Urgência',
+  'Momento da contratação',
+  'Motivo da classificação',
+  'Data de conclusão',
+  'Consentimento de dados',
+  'Autorização de contato',
+  'UTM Source',
+  'UTM Medium',
+  'UTM Campaign',
+  'UTM Content',
+  'UTM Term',
+  'FBCLID',
+  'URL de entrada',
+  'Dispositivo',
+]);
+
+export const INCOME_HEADERS = Object.freeze([
+  'Lead ID',
+  'Data de criação',
+  'Status',
+  'Nome',
+  'WhatsApp',
+  'E-mail',
+  'Situação atual',
+  'Faixa de renda',
+  'Urgência',
+  'Momento da contratação',
+  'Motivo da classificação',
+  'Data de conclusão',
+  'Consentimento de dados',
+  'Autorização de contato',
+  'UTM Source',
+  'UTM Medium',
+  'UTM Campaign',
+  'UTM Content',
+  'UTM Term',
+  'FBCLID',
+  'URL de entrada',
+  'Dispositivo',
+]);
 
 export const OLD_HEADERS = Object.freeze([
   'Lead ID',
@@ -43,11 +94,6 @@ export const OLD_HEADERS = Object.freeze([
 
 export const REMOVED_HEADERS = Object.freeze(OLD_HEADERS.filter((header) => !FINAL_HEADERS.includes(header)));
 
-const DERIVED_FORMULAS = Object.freeze({
-  Qualificados: `=IFERROR(QUERY(Leads!A2:V;"select * where C = 'Qualificado'";0);"")`,
-  Desqualificados: `=IFERROR(QUERY(Leads!A2:V;"select * where C = 'Desqualificado'";0);"")`,
-});
-
 function trimmedHeaders(row = []) {
   const headers = row.map((value) => String(value ?? '').trim());
   while (headers.at(-1) === '') headers.pop();
@@ -63,8 +109,10 @@ function sameHeaderSet(actual, expected) {
 export function identifyHeaderVersion(row) {
   const headers = trimmedHeaders(row);
   if (sameHeaderSet(headers, OLD_HEADERS)) return 'old';
+  if (sameHeaderSet(headers, PREVIOUS_HEADERS)) return 'previous';
+  if (sameHeaderSet(headers, INCOME_HEADERS)) return 'income';
   if (sameHeaderSet(headers, FINAL_HEADERS)) return 'final';
-  throw new Error('A estrutura de cabeçalhos não corresponde ao modelo antigo nem ao modelo final esperado.');
+  throw new Error('A estrutura de cabeçalhos não corresponde a uma versão reconhecida.');
 }
 
 export function transformLeadValues(values = []) {
@@ -106,6 +154,20 @@ function validateDashboard(values = []) {
 
 function buildRequests({ sheetsByTitle, transformedLeads, oldSchemaTitles }) {
   const requests = [];
+
+  for (const title of ['Leads', 'Qualificados', 'Desqualificados']) {
+    const sheet = sheetsByTitle.get(title);
+    const missingColumns = FINAL_HEADERS.length - sheet.properties.gridProperties.columnCount;
+    if (missingColumns > 0) {
+      requests.push({
+        appendDimension: {
+          sheetId: sheet.properties.sheetId,
+          dimension: 'COLUMNS',
+          length: missingColumns,
+        },
+      });
+    }
+  }
 
   for (const title of ['Leads', 'Qualificados', 'Desqualificados']) {
     const sheet = sheetsByTitle.get(title);
@@ -159,7 +221,7 @@ function buildRequests({ sheetsByTitle, transformedLeads, oldSchemaTitles }) {
     });
     requests.push({
       updateCells: {
-        rows: [{ values: [{ userEnteredValue: { formulaValue: DERIVED_FORMULAS[title] } }] }],
+        rows: [{ values: [{ userEnteredValue: { formulaValue: DERIVED_VIEW_FORMULAS[title] } }] }],
         range: { sheetId, startRowIndex: 1, endRowIndex: 2, startColumnIndex: 0, endColumnIndex: 1 },
         fields: 'userEnteredValue',
       },
@@ -184,9 +246,6 @@ function buildRequests({ sheetsByTitle, transformedLeads, oldSchemaTitles }) {
       },
     });
     const columnCount = sheet.properties.gridProperties.columnCount;
-    if (columnCount < FINAL_HEADERS.length) {
-      throw new Error(`A aba ${title} possui menos de ${FINAL_HEADERS.length} colunas.`);
-    }
     if (columnCount > FINAL_HEADERS.length) {
       requests.push({
         deleteDimension: {
@@ -258,7 +317,8 @@ export async function runMigration({ dryRun = false, environment = process.env, 
   const summary = {
     dryRun,
     rows: Math.max(0, transformedLeads.length - 1),
-    currentColumns: currentVersion === 'old' ? OLD_HEADERS.length : FINAL_HEADERS.length,
+    currentColumns: currentVersion === 'old' ? OLD_HEADERS.length
+      : currentVersion === 'final' ? FINAL_HEADERS.length : INCOME_HEADERS.length,
     finalColumns: FINAL_HEADERS.length,
     removedHeaders: [...REMOVED_HEADERS],
     verifiedSheets: [...REQUIRED_SHEETS],
@@ -279,9 +339,9 @@ export async function runMigration({ dryRun = false, environment = process.env, 
   const verification = await sheets.spreadsheets.values.batchGet({
     spreadsheetId: configuration.spreadsheetId,
     ranges: [
-      "'Leads'!A1:V1",
-      "'Qualificados'!A1:V1",
-      "'Desqualificados'!A1:V1",
+      "'Leads'!A1:W1",
+      "'Qualificados'!A1:W1",
+      "'Desqualificados'!A1:W1",
       "'Qualificados'!A2",
       "'Desqualificados'!A2",
     ],
@@ -294,8 +354,8 @@ export async function runMigration({ dryRun = false, environment = process.env, 
       throw new Error('A verificação final dos cabeçalhos falhou.');
     }
   }
-  if (verifiedRanges[3]?.values?.[0]?.[0] !== DERIVED_FORMULAS.Qualificados
-    || verifiedRanges[4]?.values?.[0]?.[0] !== DERIVED_FORMULAS.Desqualificados) {
+  if (verifiedRanges[3]?.values?.[0]?.[0] !== DERIVED_VIEW_FORMULAS.Qualificados
+    || verifiedRanges[4]?.values?.[0]?.[0] !== DERIVED_VIEW_FORMULAS.Desqualificados) {
     throw new Error('A verificação final das fórmulas derivadas falhou.');
   }
   const finalMetadata = await sheets.spreadsheets.get({

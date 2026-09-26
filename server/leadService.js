@@ -141,7 +141,7 @@ export function createLeadService({ repository, now = () => new Date(), createId
 
     async updateLead(leadId, payload) {
       ensureObject(payload);
-      const allowed = new Set(['situation', 'concern', 'urgency', 'hiring', 'name', 'phone', 'email']);
+      const allowed = new Set(['situation', 'income', 'pensionRange', 'urgency', 'hiring', 'name', 'phone', 'email']);
       const keys = Object.keys(payload);
       if (!keys.length || keys.some((key) => !allowed.has(key))) {
         throw new LeadServiceError('Payload de atualização inválido.');
@@ -156,7 +156,7 @@ export function createLeadService({ repository, now = () => new Date(), createId
         });
         applyPersonal(row, personal);
       }
-      for (const id of ['situation', 'concern', 'urgency', 'hiring']) {
+      for (const id of ['situation', 'income', 'pensionRange', 'urgency', 'hiring']) {
         if (payload[id] !== undefined) row[COLUMNS[id]] = toSheetLabel(id, validateChoice(id, payload[id]));
       }
       await repository.update(rowNumber, assertCanonicalLeadRow(row));
@@ -169,7 +169,8 @@ export function createLeadService({ repository, now = () => new Date(), createId
       const normalized = {
         ...personal,
         situation: validateChoice('situation', payload.situation),
-        concern: validateChoice('concern', payload.concern),
+        income: validateChoice('income', payload.income),
+        pensionRange: validateChoice('pensionRange', payload.pensionRange),
         urgency: validateChoice('urgency', payload.urgency),
         hiring: validateChoice('hiring', payload.hiring),
         dataConsent: payload.dataConsent === true,
@@ -182,7 +183,9 @@ export function createLeadService({ repository, now = () => new Date(), createId
       const { rowNumber, row } = await findLead(leadId);
       const result = classifyLead(normalized);
       applyPersonal(row, personal);
-      for (const id of ['situation', 'concern', 'urgency', 'hiring']) row[COLUMNS[id]] = toSheetLabel(id, normalized[id]);
+      for (const id of ['situation', 'income', 'pensionRange', 'urgency', 'hiring']) {
+        row[COLUMNS[id]] = toSheetLabel(id, normalized[id]);
+      }
       row[COLUMNS.status] = result.classification === 'qualified' ? 'Qualificado' : 'Desqualificado';
       row[COLUMNS.reason] = protectSheetText(result.reason);
       row[COLUMNS.completedAt] ||= now().toISOString();

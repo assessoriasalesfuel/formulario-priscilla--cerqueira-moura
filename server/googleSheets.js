@@ -71,7 +71,7 @@ export function createGoogleSheetsRepository({ environment = process.env, sheets
         const headers = response.data.values?.[0] ?? [];
         if (!hasCanonicalLeadHeaders(headers)) {
           throw new GoogleSheetsError(
-            'O cabeçalho da aba Leads não corresponde ao schema esperado de 22 colunas.',
+            'O cabeçalho da aba Leads não corresponde ao schema esperado de 23 colunas.',
             undefined,
             'SHEETS_SCHEMA_MISMATCH',
           );

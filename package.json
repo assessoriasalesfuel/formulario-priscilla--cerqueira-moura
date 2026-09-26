@@ -10,7 +10,9 @@
     "dev": "node --watch server.js",
     "test": "node --test",
     "migrate:sheet:dry": "node scripts/migrateSheetColumns.js --dry-run",
-    "migrate:sheet": "node scripts/migrateSheetColumns.js"
+    "migrate:sheet": "node scripts/migrateSheetColumns.js",
+    "repair:sheet:views:dry": "node scripts/repairSheetViews.js --dry-run",
+    "repair:sheet:views": "node scripts/repairSheetViews.js"
   },
   "engines": {
     "node": ">=22.0.0"

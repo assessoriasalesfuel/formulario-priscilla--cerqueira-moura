@@ -37,7 +37,8 @@ async function withServer(run) {
 const personal = { name: 'Ana Lúcia', phone: '27998737944', email: 'ana@example.com' };
 const answers = {
   name: 'Ana Lúcia', phone: '27998737944', email: 'ana@example.com',
-  situation: 'protective_measure_received', concern: 'children_contact', urgency: 'deadline_48h',
+  situation: 'protective_measure_received', income: 'from_6000_to_10000',
+  pensionRange: 'from_500_to_1500', urgency: 'deadline_48h',
   hiring: 'ready_to_hire', dataConsent: true, contactConsent: true,
 };
 

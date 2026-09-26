@@ -23,14 +23,23 @@ export const questions = [
     ],
   },
   {
-    id: 'concern', type: 'choice', title: 'O que mais preocupa você neste momento?',
+    id: 'income', type: 'choice',
+    title: 'Para direcionarmos o atendimento adequado, qual é sua faixa de renda mensal aproximada?',
     options: [
-      ['children_contact', 'Não conseguir ver meus filhos.'],
-      ['leave_home', 'Ter que sair de casa.'],
-      ['breach_accusation', 'Ser acusado de descumprir a medida.'],
-      ['work_or_company', 'Ter problemas no trabalho ou na empresa.'],
-      ['reputation_or_assets', 'Prejudicar minha reputação ou meu patrimônio.'],
-      ['next_steps', 'Não saber o que fazer a partir de agora.'],
+      ['up_to_3000', 'Até R$ 3.000.'],
+      ['from_3000_to_6000', 'De R$ 3.001 a R$ 6.000.'],
+      ['from_6000_to_10000', 'De R$ 6.001 a R$ 10.000.'],
+      ['above_10000', 'Acima de R$ 10.000.'],
+    ],
+  },
+  {
+    id: 'pensionRange', type: 'choice',
+    title: 'Você paga pensão alimentícia atualmente? Se sim, qual faixa de valor?',
+    options: [
+      ['not_paying', 'Não pago pensão atualmente'],
+      ['up_to_500', 'Até R$ 500'],
+      ['from_500_to_1500', 'De R$ 500 a R$ 1.500'],
+      ['above_1500', 'Acima de R$ 1.500'],
     ],
   },
   {
@@ -45,10 +54,11 @@ export const questions = [
     ],
   },
   {
-    id: 'hiring', type: 'choice', title: 'Sobre contratar um advogado particular, qual opção representa melhor seu momento?',
+    id: 'hiring', type: 'choice',
+    title: 'Caso seja identificada uma estratégia adequada para o seu caso, qual opção representa melhor seu momento?',
     options: [
-      ['ready_to_hire', 'Estou preparado para contratar se o atendimento fizer sentido.'],
-      ['needs_pricing', 'Quero entender os valores e as condições antes de decidir.'],
+      ['ready_to_hire', 'Estou preparado para contratar e quero resolver isso agora.'],
+      ['needs_pricing', 'Tenho interesse, mas preciso entender os valores e as condições.'],
       ['researching', 'Ainda estou apenas pesquisando.'],
       ['free_only', 'Procuro exclusivamente atendimento gratuito.'],
     ],

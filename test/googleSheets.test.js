@@ -27,7 +27,7 @@ function createClient({ headers = LEAD_HEADERS } = {}) {
         },
         async get(options) {
           calls.push(['get', options]);
-          if (options.range === "'Leads'!A1:V1") return { data: { values: [headers] } };
+          if (options.range === "'Leads'!A1:W1") return { data: { values: [headers] } };
           return { data: { values: [['id-1', 'A'], ['id-2', 'B']] } };
         },
         async update(options) {
@@ -47,7 +47,7 @@ test('repositório do Sheets usa escrita RAW e somente a aba Leads', async () =>
   await repository.append(row);
   const options = client.calls.find(([method]) => method === 'append')[1];
   assert.equal(options.spreadsheetId, 'sheet-id');
-  assert.equal(options.range, "'Leads'!A2:V");
+  assert.equal(options.range, "'Leads'!A2:W");
   assert.equal(options.valueInputOption, 'RAW');
 });
 
@@ -55,7 +55,7 @@ test('localiza linha por Lead ID sem aceitar índice do cliente', async () => {
   const repository = createGoogleSheetsRepository({ environment, sheetsClient: createClient() });
   const result = await repository.findByLeadId('id-2');
   assert.equal(result.rowNumber, 3);
-  assert.equal(result.row.length, 22);
+  assert.equal(result.row.length, 23);
   assert.deepEqual(result.row.slice(0, 2), ['id-2', 'B']);
   assert.equal(await repository.findByLeadId('ausente'), null);
 });
@@ -65,7 +65,7 @@ test('atualiza a faixa correspondente à linha localizada', async () => {
   const repository = createGoogleSheetsRepository({ environment, sheetsClient: client });
   await repository.update(7, leadRow('id-7'));
   const options = client.calls.find(([method]) => method === 'update')[1];
-  assert.equal(options.range, "'Leads'!A7:V7");
+  assert.equal(options.range, "'Leads'!A7:W7");
   assert.equal(options.valueInputOption, 'RAW');
 });
 
@@ -77,7 +77,7 @@ test('rejeita configuração ausente sem expor credenciais', async () => {
   );
 });
 
-test('bloqueia qualquer escrita quando o cabeçalho não corresponde ao schema A:V', async () => {
+test('bloqueia qualquer escrita quando o cabeçalho não corresponde ao schema A:W', async () => {
   const headers = [...LEAD_HEADERS];
   headers[3] = 'Prioridade';
   const client = createClient({ headers });
@@ -89,11 +89,11 @@ test('bloqueia qualquer escrita quando o cabeçalho não corresponde ao schema A
   assert.equal(client.calls.some(([method]) => method === 'append'), false);
 });
 
-test('append e update rejeitam arrays diferentes de 22 células antes da escrita', async () => {
+test('append e update rejeitam arrays diferentes de 23 células antes da escrita', async () => {
   const client = createClient();
   const repository = createGoogleSheetsRepository({ environment, sheetsClient: client });
   await assert.rejects(() => repository.append(Array(30).fill('')), GoogleSheetsError);
-  await assert.rejects(() => repository.update(2, Array(21).fill('')), GoogleSheetsError);
+  await assert.rejects(() => repository.update(2, Array(22).fill('')), GoogleSheetsError);
   assert.equal(client.calls.some(([method]) => method === 'append' || method === 'update'), false);
 });
 
@@ -102,6 +102,6 @@ test('valida o cabeçalho uma vez e reutiliza o resultado em operações posteri
   const repository = createGoogleSheetsRepository({ environment, sheetsClient: client });
   await repository.append(leadRow('id-1'));
   await repository.update(2, leadRow('id-1'));
-  const headerReads = client.calls.filter(([, options]) => options.range === "'Leads'!A1:V1");
+  const headerReads = client.calls.filter(([, options]) => options.range === "'Leads'!A1:W1");
   assert.equal(headerReads.length, 1);
 });
