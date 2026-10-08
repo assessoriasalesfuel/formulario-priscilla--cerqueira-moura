@@ -1,6 +1,6 @@
 # Formulário de qualificação — Dra. Priscilla Cerqueira Moura
 
-Aplicação web mobile-first para uma análise inicial rápida de potenciais clientes. O fluxo apresenta uma pergunta por tela, persiste o acompanhamento na aba `Leads` de uma planilha Google Sheets e libera o contato por WhatsApp somente após confirmação server-side de um lead qualificado.
+Aplicação web mobile-first para uma análise inicial rápida de potenciais clientes. O Formulário Mini apresenta três perguntas, uma por tela, leva aproximadamente 30 segundos, persiste a conclusão na aba `Leads` de uma planilha Google Sheets e libera o contato por WhatsApp somente após confirmação server-side de um lead qualificado.
 
 ## Stack
 
@@ -23,17 +23,17 @@ Aplicação web mobile-first para uma análise inicial rápida de potenciais cli
 │       ├── app.js             # estado, renderização e navegação
 │       ├── questions.js       # perguntas e opções do formulário
 │       ├── validation.js      # normalização e validações puras
-│       ├── qualification.js   # classificação e prioridade
+│       ├── qualification.js   # classificação do Formulário Mini
 │       ├── whatsapp.js        # configuração e criação do link
 │       ├── attribution.js     # UTMs, FBCLID, URL inicial e dispositivo
 │       ├── metaPixel.js       # eventos do Meta Pixel sem dados pessoais
 │       └── leadGateway.js     # chamadas HTTP ao backend
 ├── server/
 │   ├── googleSheets.js        # autenticação e operações na aba Leads
-│   ├── leadSchema.js          # fonte única dos 23 cabeçalhos e índices A:W
+│   ├── leadSchema.js          # fonte única dos 18 cabeçalhos e índices A:R
 │   └── leadService.js         # validação, classificação e persistência
 ├── scripts/
-│   ├── migrateSheetColumns.js # migração explícita do CRM para 23 colunas
+│   ├── migrateSheetColumns.js # migração protegida do CRM para 18 colunas
 │   └── repairSheetViews.js     # reparo restrito das seis fórmulas derivadas
 ├── test/                      # testes unitários e de integração simulada
 ├── Dockerfile                 # imagem de produção com Node.js 22
@@ -58,7 +58,7 @@ A aplicação fica disponível em `http://localhost:3000`. Para desenvolvimento 
 npm run dev
 ```
 
-É possível alterar a porta pela variável de ambiente `PORT`.
+É possível alterar a porta pela variável de ambiente `PORT`. Em produção, o Express escuta em `0.0.0.0` para ser acessível pelo proxy do EasyPanel.
 
 ## Google Sheets e variáveis de ambiente
 
@@ -69,6 +69,9 @@ GOOGLE_SHEET_ID=
 GOOGLE_SERVICE_ACCOUNT_EMAIL=
 GOOGLE_PRIVATE_KEY=
 CONFIRM_SHEET_MIGRATION=false
+CONFIRM_SHEET_BACKUP_VERIFIED=false
+GOOGLE_SHEET_BACKUP_ID=
+CONFIRM_SHEET_VIEW_REPAIR=false
 ```
 
 Use `.env.example` apenas como referência. O projeto não carrega `.env` automaticamente: em produção, configure os valores no painel do serviço. A chave privada pode ser armazenada com quebras de linha representadas por `\n`; o servidor faz a normalização antes de autenticar.
@@ -79,35 +82,30 @@ Durante o uso normal da aplicação, somente a aba `Leads` é escrita. As abas `
 
 ### Estrutura do CRM
 
-A aba `Leads` usa exatamente 23 colunas (A:W), nesta ordem:
+A aba `Leads` usa exatamente 18 colunas (A:R), nesta ordem:
 
 1. Lead ID
 2. Data de criação
 3. Status
-4. Nome
-5. WhatsApp
-6. E-mail
-7. Situação atual
-8. Faixa de renda
-9. Faixa de pensão alimentícia
-10. Urgência
-11. Momento da contratação
-12. Motivo da classificação
-13. Data de conclusão
-14. Consentimento de dados
-15. Autorização de contato
-16. UTM Source
-17. UTM Medium
-18. UTM Campaign
-19. UTM Content
-20. UTM Term
-21. FBCLID
-22. URL de entrada
-23. Dispositivo
+4. Tempo desde a medida protetiva
+5. Disponibilidade para investir
+6. WhatsApp
+7. Motivo da classificação
+8. Data de conclusão
+9. Consentimento de dados
+10. Autorização de contato
+11. UTM Source
+12. UTM Medium
+13. UTM Campaign
+14. UTM Content
+15. UTM Term
+16. FBCLID
+17. URL de entrada
+18. Dispositivo
 
-`Data de criação` e `Data de conclusão` são geradas exclusivamente no servidor. A data de conclusão permanece vazia durante o preenchimento e é registrada somente após validação e classificação bem-sucedidas. O CRM não mantém Prioridade, DDD, Última etapa, Última atualização, WhatsApp acessado, Data do acesso ao WhatsApp, Data do consentimento ou Referrer.
+`Data de criação` e `Data de conclusão` são geradas exclusivamente no servidor. A aba `Histórico — Formulário anterior` mantém integralmente o modelo anterior e não é escrita pelo fluxo operacional nem pela migração. As abas `Leads`, `Qualificados` e `Desqualificados` usam os mesmos 18 cabeçalhos.
 
-Antes da primeira operação de cada instância do repositório, o backend valida o cabeçalho `Leads!A1:W1` e mantém o resultado em memória. Append e update aceitam somente arrays com exatamente 23 células; qualquer divergência bloqueia a escrita para evitar deslocamento ou expansão silenciosa da planilha.
+Antes da primeira operação de cada instância do repositório, o backend valida o cabeçalho `Leads!A1:R1` e mantém o resultado em memória. Append e update aceitam somente arrays com exatamente 18 células; qualquer divergência bloqueia a escrita.
 
 ### Migração controlada da planilha
 
@@ -117,13 +115,21 @@ A migração nunca roda no startup. Estes comandos só devem ser usados em uma m
 npm run migrate:sheet:dry
 ```
 
-O script valida as abas `Leads`, `Qualificados`, `Desqualificados` e `Visão geral`, transforma as linhas pelo nome dos cabeçalhos e não imprime dados pessoais. Para aplicar a migração real, depois de revisar o dry-run, defina explicitamente `CONFIRM_SHEET_MIGRATION=true` e execute:
+O dry-run valida as seis abas atuais, exige 52 Lead IDs únicos em `Histórico — Formulário anterior`, confirma que `Leads — Mini` não contém registros e não imprime dados pessoais. A execução real permanece bloqueada até existir uma cópia separada e verificada da planilha. Depois de criar essa cópia, informe seu ID e habilite as duas confirmações:
+
+```text
+GOOGLE_SHEET_BACKUP_ID=<id da cópia verificada>
+CONFIRM_SHEET_BACKUP_VERIFIED=true
+CONFIRM_SHEET_MIGRATION=true
+```
+
+Somente então execute:
 
 ```bash
 npm run migrate:sheet
 ```
 
-A operação reconhece a estrutura antiga de 30 colunas, a estrutura de 22 colunas com `Principal preocupação`, a estrutura de 22 colunas com `Faixa de renda` e a estrutura atual de 23 colunas. Ela preserva os campos compatíveis, os Lead IDs e a Data de conclusão; leads antigos ficam com a nova faixa de pensão vazia. Também atualiza as fórmulas derivadas para `Leads!A2:W`, ajusta filtros para A:W, mantém a primeira linha congelada, remove formatação condicional exclusiva de Prioridade e ajusta fisicamente a quantidade de colunas. Não execute a migração sem revisar o dry-run e reservar uma janela de manutenção.
+A operação transforma o schema operacional legado de 23 colunas no schema de 18, atualiza cabeçalhos, fórmulas `Leads!A2:R`, filtros e congelamento da primeira linha. A aba `Leads — Mini` só é removida se estiver vazia. O conteúdo de `Histórico — Formulário anterior` é comparado antes e depois, e a migração aborta se o backup não for idêntico ao estado atual. Não execute sem revisar o dry-run e reservar uma janela de manutenção.
 
 ### Reparo das visões derivadas
 
@@ -141,7 +147,7 @@ Para executar no ambiente seguro que já possui as credenciais Google, revise pr
 npm run repair:sheet:views
 ```
 
-O script exige locale `pt_BR`, valida as quatro abas e os cabeçalhos A:W, compara os Lead IDs antes e depois sem imprimi-los e não altera valores, cabeçalhos, filtros ou formatação da aba `Leads`.
+O script exige locale `pt_BR`, valida as quatro abas operacionais e os cabeçalhos A:R, compara os Lead IDs antes e depois sem imprimi-los e não altera valores, cabeçalhos, filtros ou formatação da aba `Leads`.
 
 ## Docker
 
@@ -160,7 +166,7 @@ A imagem utiliza Node.js 22 Alpine, instala somente dependências de produção,
 npm test
 ```
 
-Os testes cobrem validações, classificação, prioridade, persistência simulada, idempotência, proteção contra fórmulas, falhas do Sheets e controle server-side do WhatsApp. Nenhum teste acessa o Google Sheets real.
+Os testes cobrem as três perguntas, validação do WhatsApp, consentimentos, classificação, persistência simulada, idempotência, proteção contra fórmulas, falhas do Sheets, Meta Pixel e controle server-side do WhatsApp. Nenhum teste acessa o Google Sheets real.
 
 ## Health check
 
@@ -174,18 +180,15 @@ O Express publica somente o conteúdo de `public/`; arquivos da raiz, testes, m�
 
 ## Classificação
 
-Um lead é qualificado quando informa uma das cinco situações atendidas (inclusive ajuda para familiar), aceita as duas confirmações finais e possui uma destas combinações:
+O Formulário Mini possui três perguntas:
 
-- renda a partir de R$ 6.001 e interesse em contratar ou entender valores e condições;
-- renda entre R$ 3.001 e R$ 6.000, urgência identificada e disposição para contratar agora.
+1. quando a medida protetiva foi recebida;
+2. disponibilidade para investir em uma defesa profissional;
+3. WhatsApp com os dois consentimentos obrigatórios exibidos na mesma etapa.
 
-O lead é desqualificado quando possui renda de até R$ 3.000, seleciona situação diferente, está apenas pesquisando, busca exclusivamente atendimento gratuito ou não atende à combinação intermediária. A prioridade é:
+Um lead é qualificado exclusivamente quando consegue investir, inclusive por parcelamento. É desqualificado somente quando informa que não consegue investir agora. O tempo desde a medida continua obrigatório, é registrado no Sheets e não influencia a classificação.
 
-- `urgent`: prazo em 48 horas, prazo em 7 dias ou acusação de descumprimento;
-- `high`: medida em vigor sem conhecimento dos prazos;
-- `normal`: sem prazo/medida oficial ou quando não sabe informar.
-
-A função pura `classifyLead` centraliza essas regras e é executada novamente no servidor durante a conclusão. A prioridade interna continua sendo usada apenas para preservar o cálculo do motivo; ela não é persistida nem retornada pela API. Classificação, prioridade e motivo enviados pelo navegador são ignorados.
+A função pura `classifyLead` centraliza essas regras e é executada novamente no servidor durante a conclusão. Classificação e motivo enviados pelo navegador são ignorados. Os textos de resultado não prometem revogação da medida nem qualquer resultado jurídico.
 
 ## WhatsApp
 

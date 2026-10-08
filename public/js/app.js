@@ -1,9 +1,6 @@
 import { questions } from './questions.js';
-import {
-  formatBrazilianPhone, normalizeEmail, normalizeName, validateEmail, validateName,
-  validatePhone,
-} from './validation.js';
-import { completeLead, createLead, registerWhatsAppAccess, updateLead } from './leadGateway.js';
+import { formatBrazilianPhone, validatePhone } from './validation.js';
+import { completeLead, createLead, registerWhatsAppAccess } from './leadGateway.js';
 import { captureAttribution } from './attribution.js';
 import {
   trackFormCompleted, trackFormStarted, trackQualifiedLead, trackWhatsAppContact,
@@ -12,7 +9,7 @@ import {
 const app = document.querySelector('#app');
 const attribution = captureAttribution();
 const initialAnswers = () => ({
-  name: '', phone: '', email: '', situation: '', income: '', pensionRange: '', urgency: '', hiring: '',
+  measureTime: '', investment: '', phone: '',
   dataConsent: false, contactConsent: false,
 });
 
@@ -60,8 +57,8 @@ function renderIntro() {
   const card = element('section', { className: 'card card--intro', 'aria-labelledby': 'intro-title' });
   const eyebrow = element('p', { className: 'eyebrow' }, 'Análise inicial');
   const title = element('h1', { id: 'intro-title', tabindex: '-1' }, 'Entenda o próximo passo para a sua situação');
-  const copy = element('p', { className: 'lead' }, 'Responda algumas perguntas rápidas para identificarmos como podemos ajudar.');
-  const time = element('p', { className: 'time-note' }, 'Leva aproximadamente 1 minuto.');
+  const copy = element('p', { className: 'lead' }, 'Responda três perguntas rápidas para identificarmos como podemos ajudar.');
+  const time = element('p', { className: 'time-note' }, 'Leva aproximadamente 30 segundos.');
   const button = createButton('Começar');
   button.addEventListener('click', () => {
     trackFormStarted();
@@ -108,9 +105,7 @@ async function ensureLeadCreated() {
   if (leadId) return leadId;
   if (!leadCreationPromise) {
     leadCreationPromise = createLead({
-      name: answers.name,
       phone: answers.phone,
-      email: answers.email,
       ...attribution,
     }, creationKey).then((result) => {
       leadId = result.leadId;
@@ -123,7 +118,7 @@ async function ensureLeadCreated() {
   return leadCreationPromise;
 }
 
-function createTextQuestion(question, form) {
+function createContactQuestion(question, form) {
   const group = element('div', { className: 'field-group' });
   const label = element('label', { for: question.id }, question.label);
   const input = element('input', {
@@ -131,38 +126,56 @@ function createTextQuestion(question, form) {
     inputmode: question.inputMode, maxlength: String(question.maxLength), required: '',
     'aria-describedby': `${question.id}-error`, 'data-autofocus': '',
   });
-  input.value = question.id === 'phone' ? formatBrazilianPhone(answers.phone) : answers[question.id];
+  input.value = formatBrazilianPhone(answers.phone);
   const error = createError(`${question.id}-error`);
-  if (question.id === 'phone') {
-    input.addEventListener('input', () => {
-      input.value = formatBrazilianPhone(input.value);
-      clearError(input, error);
-    });
-  } else {
-    input.addEventListener('input', () => clearError(input, error));
-  }
-  input.addEventListener('blur', () => {
-    if (question.id === 'name') input.value = normalizeName(input.value);
-    if (question.id === 'email') input.value = normalizeEmail(input.value);
+  input.addEventListener('input', () => {
+    input.value = formatBrazilianPhone(input.value);
+    clearError(input, error);
   });
-  const submitButton = element('button', { type: 'submit', className: 'button button--primary' }, 'Continuar');
+
+  const consentFieldset = element('fieldset', { className: 'choice-list consent-list', 'aria-describedby': 'consent-error' });
+  consentFieldset.append(element('legend', { className: 'sr-only' }, 'Confirmações obrigatórias'));
+  const consentItems = [
+    ['dataConsent', 'Concordo com o tratamento dos meus dados para análise da solicitação.'],
+    ['contactConsent', 'Autorizo o contato comercial por WhatsApp, telefone e e-mail.'],
+  ];
+  consentItems.forEach(([id, text]) => {
+    const consentLabel = element('label', { className: 'choice choice--checkbox' });
+    const consentInput = element('input', { type: 'checkbox', id, name: id });
+    consentInput.checked = answers[id];
+    consentInput.addEventListener('change', () => {
+      answers[id] = consentInput.checked;
+      consentError.hidden = true;
+    });
+    consentLabel.append(consentInput, element('span', { className: 'choice__marker', 'aria-hidden': 'true' }), element('span', { className: 'choice__text' }, text));
+    consentFieldset.append(consentLabel);
+  });
+  const consentError = createError('consent-error');
+  const submitButton = element('button', { type: 'submit', className: 'button button--primary' }, 'Concluir');
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
     if (navigationLocked || submitting) return;
-    const result = question.id === 'name' ? validateName(input.value)
-      : question.id === 'phone' ? validatePhone(input.value) : validateEmail(input.value);
+    const result = validatePhone(input.value);
     if (!result.valid) return showError(input, error, result.error);
     clearError(input, error);
-    answers[question.id] = result.value;
+    const controls = [...consentFieldset.querySelectorAll('input[type="checkbox"]')];
+    answers.dataConsent = controls[0].checked;
+    answers.contactConsent = controls[1].checked;
+    if (!answers.dataConsent || !answers.contactConsent) {
+      consentError.textContent = 'Aceite as duas confirmações para concluir.';
+      consentError.hidden = false;
+      controls.find((control) => !control.checked)?.focus();
+      return;
+    }
+    answers.phone = result.value;
     submitting = true;
     submitButton.disabled = true;
     try {
-      if (question.id === 'email') {
-        if (leadId) await updateLead(leadId, { email: result.value });
-        else await ensureLeadCreated();
-      }
-      else if (leadId) await updateLead(leadId, { [question.id]: result.value });
-      goNext();
+      await ensureLeadCreated();
+      const completion = await completeLead(leadId, answers);
+      trackFormCompleted();
+      trackQualifiedLead(completion.qualified);
+      renderResult(completion);
     } catch (saveError) {
       showError(input, error, friendlySaveError(saveError));
     } finally {
@@ -171,7 +184,7 @@ function createTextQuestion(question, form) {
     }
   });
   group.append(label, input, error);
-  form.append(group, submitButton);
+  form.append(group, consentFieldset, consentError, submitButton);
 }
 
 function createChoiceQuestion(question, form) {
@@ -193,82 +206,14 @@ function createChoiceQuestion(question, form) {
       form.querySelectorAll('input').forEach((item) => { item.disabled = true; });
       error.hidden = true;
       autoAdvanceTimer = setTimeout(async () => {
-        try {
-          await updateLead(leadId, { [question.id]: value });
-          navigationLocked = false;
-          renderStep(currentStep + 1);
-        } catch (saveError) {
-          error.textContent = friendlySaveError(saveError);
-          error.hidden = false;
-          input.checked = false;
-          form.querySelectorAll('input').forEach((item) => { item.disabled = false; });
-          navigationLocked = false;
-          input.focus();
-        }
+        navigationLocked = false;
+        renderStep(currentStep + 1);
       }, reducedMotion.matches ? 40 : 320);
     });
     label.append(input, marker, text);
     fieldset.append(label);
   });
   form.append(fieldset, error);
-}
-
-function createConsentQuestion(form) {
-  const fieldset = element('fieldset', { className: 'choice-list consent-list' });
-  fieldset.append(element('legend', { className: 'sr-only' }, 'Confirmações obrigatórias'));
-  const items = [
-    ['dataConsent', 'Concordo com o tratamento dos meus dados para análise da solicitação.'],
-    ['contactConsent', 'Autorizo o contato por WhatsApp, telefone e e-mail.'],
-  ];
-  items.forEach(([id, text], index) => {
-    const label = element('label', { className: 'choice choice--checkbox' });
-    const input = element('input', { type: 'checkbox', id, name: id, ...(index === 0 ? { 'data-autofocus': '' } : {}) });
-    input.checked = answers[id];
-    input.addEventListener('change', () => {
-      answers[id] = input.checked;
-      error.hidden = true;
-    });
-    label.append(input, element('span', { className: 'choice__marker', 'aria-hidden': 'true' }), element('span', { className: 'choice__text' }, text));
-    fieldset.append(label);
-  });
-  const error = createError('consent-error');
-  fieldset.setAttribute('aria-describedby', 'consent-error');
-  const submitButton = element('button', { type: 'submit', className: 'button button--primary' }, 'Concluir');
-  form.addEventListener('submit', async (event) => {
-    event.preventDefault();
-    if (submitting) return;
-    const controls = [...form.querySelectorAll('input[type="checkbox"]')];
-    answers.dataConsent = controls[0].checked;
-    answers.contactConsent = controls[1].checked;
-    if (!answers.dataConsent || !answers.contactConsent) {
-      error.textContent = 'Aceite as duas confirmações para concluir.';
-      error.hidden = false;
-      controls.find((control) => !control.checked)?.focus();
-      return;
-    }
-    submitting = true;
-    submitButton.disabled = true;
-    try {
-      const result = await completeLead(leadId, answers);
-      trackFormCompleted();
-      trackQualifiedLead(result.qualified);
-      renderResult(result);
-    } catch (saveError) {
-      error.textContent = friendlySaveError(saveError);
-      error.hidden = false;
-    } finally {
-      submitting = false;
-      submitButton.disabled = false;
-    }
-  });
-  form.append(fieldset, error, submitButton);
-}
-
-function goNext() {
-  if (navigationLocked) return;
-  navigationLocked = true;
-  renderStep(currentStep + 1);
-  navigationLocked = false;
 }
 
 function renderStep(index) {
@@ -279,9 +224,8 @@ function renderStep(index) {
   const card = element('div', { className: 'card card--question' });
   const title = element('h1', { id: 'question-title', tabindex: '-1' }, question.title);
   const form = element('form', { novalidate: '' });
-  if (question.type === 'text' || question.type === 'tel' || question.type === 'email') createTextQuestion(question, form);
-  else if (question.type === 'choice') createChoiceQuestion(question, form);
-  else createConsentQuestion(form);
+  if (question.type === 'choice') createChoiceQuestion(question, form);
+  else createContactQuestion(question, form);
   const topbar = element('div', { className: `step-topbar${currentStep === 0 ? ' step-topbar--no-back' : ''}` });
   if (currentStep > 0) {
     const back = createButton('Voltar', 'back-button');

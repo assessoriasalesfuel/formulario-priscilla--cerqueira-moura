@@ -99,11 +99,11 @@ export function findDashboardFormulaTargets(values = []) {
 function validateHeaders(headerRanges) {
   const leadsHeaders = headerRanges[0] ?? [];
   if (!hasCanonicalLeadHeaders(leadsHeaders)) {
-    throw new Error('A aba Leads não possui exatamente os 23 cabeçalhos esperados em A:W.');
+    throw new Error('A aba Leads não possui exatamente os 18 cabeçalhos esperados em A:R.');
   }
   for (const [index, title] of ['Qualificados', 'Desqualificados'].entries()) {
     if (!hasCanonicalLeadHeaders(headerRanges[index + 1] ?? [])) {
-      throw new Error(`A aba ${title} não possui os 23 cabeçalhos esperados em A:W.`);
+      throw new Error(`A aba ${title} não possui os 18 cabeçalhos esperados em A:R.`);
     }
   }
 }
@@ -159,15 +159,15 @@ export async function runSheetViewRepair({
   if (missingSheets.length) throw new Error(`Abas obrigatórias ausentes: ${missingSheets.join(', ')}.`);
   const leadsMetadata = (metadata.data.sheets ?? []).find((sheet) => sheet.properties.title === 'Leads');
   if (leadsMetadata?.properties.gridProperties?.columnCount !== LEAD_HEADERS.length) {
-    throw new Error('A aba Leads deve possuir exatamente 23 colunas físicas, de A até W.');
+    throw new Error('A aba Leads deve possuir exatamente 18 colunas físicas, de A até R.');
   }
 
   const structure = await sheets.spreadsheets.values.batchGet({
     spreadsheetId: configuration.spreadsheetId,
     ranges: [
-      "'Leads'!A1:X1",
-      "'Qualificados'!A1:W1",
-      "'Desqualificados'!A1:W1",
+      "'Leads'!A1:S1",
+      "'Qualificados'!A1:R1",
+      "'Desqualificados'!A1:R1",
       "'Visão geral'!A1:Z100",
       "'Qualificados'!A2",
       "'Desqualificados'!A2",

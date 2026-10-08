@@ -62,7 +62,8 @@ const isMainModule = process.argv[1] && path.resolve(process.argv[1]) === fileUR
 
 if (isMainModule) {
   const port = Number(process.env.PORT) || 3000;
-  createApp().listen(port, () => {
-    console.log(`Servidor disponível em http://localhost:${port}`);
+  const host = '0.0.0.0';
+  createApp().listen(port, host, () => {
+    console.log(`Servidor disponível em http://${host}:${port}`);
   });
 }

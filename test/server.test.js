@@ -34,12 +34,10 @@ async function withServer(run) {
   }
 }
 
-const personal = { name: 'Ana Lúcia', phone: '27998737944', email: 'ana@example.com' };
+const contact = { phone: '27998737944' };
 const answers = {
-  name: 'Ana Lúcia', phone: '27998737944', email: 'ana@example.com',
-  situation: 'protective_measure_received', income: 'from_6000_to_10000',
-  pensionRange: 'from_500_to_1500', urgency: 'deadline_48h',
-  hiring: 'ready_to_hire', dataConsent: true, contactConsent: true,
+  phone: '27998737944', measureTime: 'less_than_1_month', investment: 'can_invest',
+  dataConsent: true, contactConsent: true,
 };
 
 test('endpoints executam criação, atualização, conclusão e acesso ao WhatsApp', async () => {
@@ -47,14 +45,14 @@ test('endpoints executam criação, atualização, conclusão e acesso ao WhatsA
     const createResponse = await fetch(`${baseUrl}/api/leads`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Idempotency-Key': 'browser-session' },
-      body: JSON.stringify(personal),
+      body: JSON.stringify(contact),
     });
     assert.equal(createResponse.status, 201);
     const { leadId } = await createResponse.json();
 
     const updateResponse = await fetch(`${baseUrl}/api/leads/${leadId}`, {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ situation: 'protective_measure_received' }),
+      body: JSON.stringify({ measureTime: 'less_than_1_month' }),
     });
     assert.equal(updateResponse.status, 200);
 

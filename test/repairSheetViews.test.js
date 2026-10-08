@@ -42,7 +42,7 @@ function createSheetsClient({
   locale = 'pt_BR',
   leadsAfter = leadRows,
   leadsHeaders = LEAD_HEADERS,
-  leadsColumnCount = 23,
+  leadsColumnCount = 18,
 } = {}) {
   const writes = [];
   let leadReads = 0;
@@ -57,7 +57,7 @@ function createSheetsClient({
               properties: {
                 title,
                 sheetId: index + 1,
-                gridProperties: { columnCount: title === 'Visão geral' ? 26 : title === 'Leads' ? leadsColumnCount : 23 },
+                gridProperties: { columnCount: title === 'Visão geral' ? 26 : title === 'Leads' ? leadsColumnCount : 18 },
               },
             })),
           },
@@ -121,8 +121,8 @@ test('fórmulas resilientes começam logicamente na linha 2 e nunca usam linha 1
     assert.match(formula, /INDIRECT\("Leads![AC]2:/u);
     assert.doesNotMatch(formula, /11/u);
   });
-  assert.match(DERIVED_VIEW_FORMULAS.Qualificados, /Leads!A2:W/u);
-  assert.match(DERIVED_VIEW_FORMULAS.Desqualificados, /Leads!A2:W/u);
+  assert.match(DERIVED_VIEW_FORMULAS.Qualificados, /Leads!A2:R/u);
+  assert.match(DERIVED_VIEW_FORMULAS.Desqualificados, /Leads!A2:R/u);
 });
 
 test('métricas contam todos os leads e excluem Em preenchimento das derivadas e da taxa', () => {
@@ -187,11 +187,11 @@ test('reparo usa exatamente as fórmulas INDIRECT aprovadas', async () => {
   ]);
 });
 
-test('reparo aborta se os cabeçalhos de Leads não forem exatamente A:W', async () => {
+test('reparo aborta se os cabeçalhos de Leads não forem exatamente A:R', async () => {
   const client = createSheetsClient({ leadsHeaders: [...LEAD_HEADERS, 'Extra'] });
   await assert.rejects(
     () => runSheetViewRepair({ dryRun: true, environment, sheetsClient: client }),
-    /23 cabeçalhos/u,
+    /18 cabeçalhos/u,
   );
   assert.equal(client.writes.length, 0);
 });
@@ -205,11 +205,11 @@ test('reparo exige locale pt_BR antes de interpretar fórmulas', async () => {
   assert.equal(client.writes.length, 0);
 });
 
-test('reparo aborta se Leads não possuir exatamente 23 colunas físicas', async () => {
+test('reparo aborta se Leads não possuir exatamente 18 colunas físicas', async () => {
   const client = createSheetsClient({ leadsColumnCount: 30 });
   await assert.rejects(
     () => runSheetViewRepair({ dryRun: true, environment, sheetsClient: client }),
-    /23 colunas físicas/u,
+    /18 colunas físicas/u,
   );
   assert.equal(client.writes.length, 0);
 });

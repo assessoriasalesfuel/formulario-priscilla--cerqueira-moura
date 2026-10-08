@@ -17,10 +17,10 @@ test('código base inicializa o Pixel e dispara PageView uma única vez', () => 
 });
 
 test('eventos de conclusão dependem do sucesso e da classificação do backend', () => {
-  const completion = appSource.indexOf('const result = await completeLead(leadId, answers)');
+  const completion = appSource.indexOf('const completion = await completeLead(leadId, answers)');
   const completedEvent = appSource.indexOf('trackFormCompleted()', completion);
-  const leadEvent = appSource.indexOf('trackQualifiedLead(result.qualified)', completion);
-  const resultRender = appSource.indexOf('renderResult(result)', completion);
+  const leadEvent = appSource.indexOf('trackQualifiedLead(completion.qualified)', completion);
+  const resultRender = appSource.indexOf('renderResult(completion)', completion);
   assert.ok(completion >= 0 && completion < completedEvent);
   assert.ok(completedEvent < leadEvent);
   assert.ok(leadEvent < resultRender);

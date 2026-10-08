@@ -6,8 +6,8 @@ export const DASHBOARD_FORMULAS = Object.freeze({
 });
 
 export const DERIVED_VIEW_FORMULAS = Object.freeze({
-  Qualificados: '=IFERROR(QUERY(INDIRECT("Leads!A2:W");"select * where C = \'Qualificado\'";0);"")',
-  Desqualificados: '=IFERROR(QUERY(INDIRECT("Leads!A2:W");"select * where C = \'Desqualificado\'";0);"")',
+  Qualificados: '=IFERROR(QUERY(INDIRECT("Leads!A2:R");"select * where C = \'Qualificado\'";0);"")',
+  Desqualificados: '=IFERROR(QUERY(INDIRECT("Leads!A2:R");"select * where C = \'Desqualificado\'";0);"")',
 });
 
 export const VIEW_FORMULA_COUNT = Object.keys(DASHBOARD_FORMULAS).length

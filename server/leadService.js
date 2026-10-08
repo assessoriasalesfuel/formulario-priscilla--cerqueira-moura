@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { classifyLead } from '../public/js/qualification.js';
 import { questions } from '../public/js/questions.js';
-import { validateEmail, validateName, validatePhone } from '../public/js/validation.js';
+import { validatePhone } from '../public/js/validation.js';
 import { createWhatsAppLink } from '../public/js/whatsapp.js';
 import {
   assertCanonicalLeadRow,
@@ -22,7 +22,7 @@ const ATTRIBUTION_LIMITS = Object.freeze({
   entryUrl: 2000,
 });
 const DEVICES = new Set(['Mobile', 'Tablet', 'Desktop']);
-const CREATE_FIELDS = new Set(['name', 'phone', 'email', ...Object.keys(ATTRIBUTION_LIMITS), 'device']);
+const CREATE_FIELDS = new Set(['phone', ...Object.keys(ATTRIBUTION_LIMITS), 'device']);
 
 const OPTION_LABELS = new Map(
   questions.flatMap(({ id, options = [] }) => options.map(([value, label]) => [`${id}:${value}`, label])),
@@ -52,13 +52,10 @@ function ensureObject(value) {
   return value;
 }
 
-function validatePersonal(payload) {
-  const name = validateName(payload.name);
+function validateContact(payload) {
   const phone = validatePhone(payload.phone);
-  const email = validateEmail(payload.email);
-  const failure = [name, phone, email].find(({ valid }) => !valid);
-  if (failure) throw new LeadServiceError(failure.error);
-  return { name: name.value, phone: phone.value, email: email.value };
+  if (!phone.valid) throw new LeadServiceError(phone.error);
+  return { phone: phone.value };
 }
 
 function validateChoice(id, value) {
@@ -66,10 +63,8 @@ function validateChoice(id, value) {
   return value;
 }
 
-function applyPersonal(row, personal) {
-  row[COLUMNS.name] = protectSheetText(personal.name);
-  row[COLUMNS.phone] = personal.phone;
-  row[COLUMNS.email] = protectSheetText(personal.email);
+function applyContact(row, contact) {
+  row[COLUMNS.phone] = contact.phone;
 }
 
 export function normalizeAttribution(payload = {}) {
@@ -110,7 +105,7 @@ export function createLeadService({ repository, now = () => new Date(), createId
     if (Object.keys(payload).some((key) => !CREATE_FIELDS.has(key))) {
       throw new LeadServiceError('Payload de criação inválido.');
     }
-    const personal = validatePersonal(payload);
+    const contact = validateContact(payload);
     const attribution = normalizeAttribution(payload);
     const timestamp = now().toISOString();
     const leadId = createId();
@@ -118,7 +113,7 @@ export function createLeadService({ repository, now = () => new Date(), createId
     row[COLUMNS.leadId] = leadId;
     row[COLUMNS.createdAt] = timestamp;
     row[COLUMNS.status] = 'Em preenchimento';
-    applyPersonal(row, personal);
+    applyContact(row, contact);
     applyAttribution(row, attribution);
     await repository.append(assertCanonicalLeadRow(row));
     return { leadId, status: 'Em preenchimento' };
@@ -141,23 +136,21 @@ export function createLeadService({ repository, now = () => new Date(), createId
 
     async updateLead(leadId, payload) {
       ensureObject(payload);
-      const allowed = new Set(['situation', 'income', 'pensionRange', 'urgency', 'hiring', 'name', 'phone', 'email']);
+      const allowed = new Set(['measureTime', 'investment', 'phone']);
       const keys = Object.keys(payload);
       if (!keys.length || keys.some((key) => !allowed.has(key))) {
         throw new LeadServiceError('Payload de atualização inválido.');
       }
 
       const { rowNumber, row } = await findLead(leadId);
-      if (payload.name !== undefined || payload.phone !== undefined || payload.email !== undefined) {
-        const personal = validatePersonal({
-          name: payload.name ?? row[COLUMNS.name].replace(/^'/u, ''),
-          phone: payload.phone ?? row[COLUMNS.phone],
-          email: payload.email ?? row[COLUMNS.email].replace(/^'/u, ''),
-        });
-        applyPersonal(row, personal);
+      if (payload.phone !== undefined) {
+        applyContact(row, validateContact({ phone: payload.phone }));
       }
-      for (const id of ['situation', 'income', 'pensionRange', 'urgency', 'hiring']) {
-        if (payload[id] !== undefined) row[COLUMNS[id]] = toSheetLabel(id, validateChoice(id, payload[id]));
+      if (payload.measureTime !== undefined) {
+        row[COLUMNS.measureTime] = toSheetLabel('measureTime', validateChoice('measureTime', payload.measureTime));
+      }
+      if (payload.investment !== undefined) {
+        row[COLUMNS.investment] = toSheetLabel('investment', validateChoice('investment', payload.investment));
       }
       await repository.update(rowNumber, assertCanonicalLeadRow(row));
       return { leadId, status: row[COLUMNS.status] };
@@ -165,14 +158,11 @@ export function createLeadService({ repository, now = () => new Date(), createId
 
     async completeLead(leadId, payload) {
       ensureObject(payload);
-      const personal = validatePersonal(payload);
+      const contact = validateContact(payload);
       const normalized = {
-        ...personal,
-        situation: validateChoice('situation', payload.situation),
-        income: validateChoice('income', payload.income),
-        pensionRange: validateChoice('pensionRange', payload.pensionRange),
-        urgency: validateChoice('urgency', payload.urgency),
-        hiring: validateChoice('hiring', payload.hiring),
+        ...contact,
+        measureTime: validateChoice('measureTime', payload.measureTime),
+        investment: validateChoice('investment', payload.investment),
         dataConsent: payload.dataConsent === true,
         contactConsent: payload.contactConsent === true,
       };
@@ -182,10 +172,9 @@ export function createLeadService({ repository, now = () => new Date(), createId
 
       const { rowNumber, row } = await findLead(leadId);
       const result = classifyLead(normalized);
-      applyPersonal(row, personal);
-      for (const id of ['situation', 'income', 'pensionRange', 'urgency', 'hiring']) {
-        row[COLUMNS[id]] = toSheetLabel(id, normalized[id]);
-      }
+      applyContact(row, contact);
+      row[COLUMNS.measureTime] = toSheetLabel('measureTime', normalized.measureTime);
+      row[COLUMNS.investment] = toSheetLabel('investment', normalized.investment);
       row[COLUMNS.status] = result.classification === 'qualified' ? 'Qualificado' : 'Desqualificado';
       row[COLUMNS.reason] = protectSheetText(result.reason);
       row[COLUMNS.completedAt] ||= now().toISOString();

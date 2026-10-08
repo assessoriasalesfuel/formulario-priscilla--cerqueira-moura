@@ -133,6 +133,7 @@ input[aria-invalid="true"], select[aria-invalid="true"] { border-color: var(--er
 .choice--checkbox .choice__marker { border-radius: 4px; }
 .choice--checkbox input:checked + .choice__marker { border-width: 2px; background: var(--gold); box-shadow: inset 0 0 0 4px var(--surface-secondary); }
 .consent-list { gap: .85rem; }
+.field-group + .consent-list { margin-top: 1.25rem; }
 
 .back-button {
   min-width: 52px; min-height: 44px; margin: 0 0 -10px -10px; padding: .5rem .65rem; border: 0;
