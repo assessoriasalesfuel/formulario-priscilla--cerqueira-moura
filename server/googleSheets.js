@@ -21,6 +21,42 @@ export class GoogleSheetsError extends Error {
   }
 }
 
+function safeGoogleSheetsError(error) {
+  const status = error?.response?.status ?? error?.status;
+  const code = error?.code;
+  const message = String(error?.message ?? '').toLowerCase();
+  if (status === 401 || message.includes('invalid_grant') || message.includes('invalid jwt')
+    || message.includes('private key') || message.includes('decoder routines')) {
+    return new GoogleSheetsError(
+      'A autenticação da conta de serviço do Google Sheets falhou.',
+      error,
+      'SHEETS_AUTH_FAILED',
+    );
+  }
+  if (status === 403) {
+    return new GoogleSheetsError(
+      'A conta de serviço não possui permissão para acessar a planilha.',
+      error,
+      'SHEETS_PERMISSION_DENIED',
+    );
+  }
+  if (status === 404) {
+    return new GoogleSheetsError(
+      'A planilha configurada não foi encontrada.',
+      error,
+      'SHEETS_NOT_FOUND',
+    );
+  }
+  if (['ENOTFOUND', 'ECONNREFUSED', 'ECONNRESET', 'ETIMEDOUT'].includes(code)) {
+    return new GoogleSheetsError(
+      'O servidor não conseguiu alcançar o Google Sheets.',
+      error,
+      'SHEETS_NETWORK_ERROR',
+    );
+  }
+  return new GoogleSheetsError('Não foi possível concluir a operação no Google Sheets.', error);
+}
+
 function readConfiguration(environment) {
   const spreadsheetId = environment.GOOGLE_SHEET_ID?.trim();
   const clientEmail = environment.GOOGLE_SERVICE_ACCOUNT_EMAIL?.trim();
@@ -128,7 +164,7 @@ export function createGoogleSheetsRepository({ environment = process.env, sheets
       return await operation(await getContext());
     } catch (error) {
       if (error instanceof GoogleSheetsError) throw error;
-      throw new GoogleSheetsError('Não foi possível concluir a operação no Google Sheets.', error);
+      throw safeGoogleSheetsError(error);
     }
   }
 

@@ -167,6 +167,24 @@ test('aceita credencial JSON em Base64 e rejeita conteúdo inválido', async () 
   );
 });
 
+test('classifica falhas externas sem expor detalhes das credenciais', async () => {
+  const cases = [
+    [{ response: { status: 401 }, message: 'sensitive auth detail' }, 'SHEETS_AUTH_FAILED'],
+    [{ response: { status: 403 }, message: 'sensitive permission detail' }, 'SHEETS_PERMISSION_DENIED'],
+    [{ response: { status: 404 }, message: 'sensitive identifier' }, 'SHEETS_NOT_FOUND'],
+    [{ code: 'ENOTFOUND', message: 'sensitive network detail' }, 'SHEETS_NETWORK_ERROR'],
+  ];
+  for (const [failure, expectedCode] of cases) {
+    const client = createClient();
+    client.spreadsheets.values.get = async () => { throw Object.assign(new Error(failure.message), failure); };
+    const repository = createGoogleSheetsRepository({ environment, sheetsClient: client });
+    await assert.rejects(
+      () => repository.verifyConnection(),
+      (error) => error.code === expectedCode && !error.message.includes('sensitive'),
+    );
+  }
+});
+
 test('valida o cabeçalho uma única vez por instância', async () => {
   const client = createClient({ rows: [] });
   const repository = createGoogleSheetsRepository({ environment, sheetsClient: client });

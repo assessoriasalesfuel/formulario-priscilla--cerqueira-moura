@@ -44,6 +44,8 @@ CONFIRM_SHEET_VIEW_REPAIR=false
 Em produção, prefira `GOOGLE_SERVICE_ACCOUNT_JSON_BASE64`, contendo o JSON completo da Service Account codificado em Base64. Isso evita alterações de quebras de linha na chave privada pelo painel de hospedagem. `GOOGLE_APPLICATION_CREDENTIALS` é uma alternativa local; e-mail e chave privada separados continuam aceitos por compatibilidade.
 O servidor carrega o `.env` a partir da raiz do projeto e resolve caminhos relativos de credenciais nessa mesma raiz. Variáveis fornecidas pelo ambiente de produção continuam tendo precedência. `GET /api/integration-status` realiza uma verificação autenticada somente de leitura e nunca grava leads.
 
+No Easypanel, configure somente `GOOGLE_SHEET_ID`, `GOOGLE_SERVICE_ACCOUNT_JSON_BASE64` e `NODE_ENV=production`. Gere o valor Base64 localmente sem imprimir o segredo com `[Convert]::ToBase64String([IO.File]::ReadAllBytes('C:\caminho\credencial.json')) | Set-Clipboard`. O endpoint de integração retorna códigos seguros e específicos para configuração, autenticação, permissão, planilha inexistente ou falha de rede.
+
 ## Execução
 
 ```bash
