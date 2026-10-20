@@ -358,6 +358,7 @@ input[aria-invalid="true"] { border-color: var(--error); }
 .back-button:active { transform: translateY(1px); }
 .back-button:disabled { cursor: not-allowed; opacity: .5; }
 .sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
+.meta-pixel { display: none; }
 
 @media (min-width: 720px) {
   .viewport-shell { padding-top: max(var(--space-6), env(safe-area-inset-top)); padding-bottom: max(var(--space-8), env(safe-area-inset-bottom)); }

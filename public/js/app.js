@@ -2,6 +2,7 @@ import { questions } from './questions.js';
 import { FORM_CONFIG } from './formConfig.js';
 import { formatBrazilianPhone, validateName, validatePhone } from './validation.js';
 import { captureAttribution } from './attribution.js';
+import { trackCustomEvent, trackStandardEvent } from './tracking.js';
 
 async function submitLead(payload, idempotencyKey) {
   let response;
@@ -113,6 +114,7 @@ function renderIntro() {
     clearError(null, integrationError);
     try {
       await verifyIntegration();
+      trackCustomEvent('FormStarted', {}, 'form-started');
       renderStep(0);
     } catch (error) {
       showError(null, integrationError, error?.message || 'A integração está indisponível. Tente novamente.');
@@ -189,6 +191,10 @@ function createChoiceQuestion(question, form) {
       return;
     }
     continueButton.disabled = true;
+    trackCustomEvent('FormStepCompleted', {
+      step_number: currentStep + 1,
+      total_steps: questions.length,
+    }, `form-step-${currentStep + 1}`);
     goForward();
   });
   form.append(fieldset, error, continueButton);
@@ -328,6 +334,12 @@ function renderResult(result) {
   const eligible = result.completionAction === 'whatsapp'
     && result.whatsappEligible === true && Boolean(whatsappUrl);
   const pending = result.completionAction === 'financial_review';
+  trackCustomEvent('FormStepCompleted', {
+    step_number: questions.length,
+    total_steps: questions.length,
+  }, `form-step-${questions.length}`);
+  trackCustomEvent('FormSubmitted', {}, 'form-submitted');
+  if (eligible) trackStandardEvent('Lead', {}, 'qualified-whatsapp-lead');
   const card = element('section', { className: 'card card--result', 'aria-labelledby': 'result-title' });
   card.append(
     element('p', { className: 'eyebrow' }, 'Formulário concluído'),
@@ -343,6 +355,9 @@ function renderResult(result) {
   if (eligible) {
     const link = element('a', { className: 'button button--primary', href: whatsappUrl,
       target: '_blank', rel: 'noopener noreferrer' }, 'Continuar pelo WhatsApp');
+    link.addEventListener('click', () => {
+      trackStandardEvent('Contact', { contact_method: 'whatsapp' }, 'whatsapp-contact');
+    });
     card.append(link);
   }
   app.append(card);

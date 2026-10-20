@@ -56,7 +56,7 @@ export function createApp({ leadService, rateLimiter, environment = process.env,
   if (environment.NODE_ENV === 'production') app.set('trust proxy', 1);
   app.use((_request, response, next) => {
     response.set({
-      'Content-Security-Policy': "default-src 'self'; base-uri 'none'; connect-src 'self'; font-src 'self'; form-action 'self'; frame-ancestors 'none'; img-src 'self' data:; object-src 'none'; script-src 'self'; style-src 'self'",
+      'Content-Security-Policy': "default-src 'self'; base-uri 'none'; connect-src 'self' https://connect.facebook.net https://www.facebook.com; font-src 'self'; form-action 'self'; frame-ancestors 'none'; img-src 'self' data: https://www.facebook.com; object-src 'none'; script-src 'self' https://connect.facebook.net; style-src 'self'",
       'Permissions-Policy': 'camera=(), geolocation=(), microphone=()',
       'Referrer-Policy': 'no-referrer',
       'X-Content-Type-Options': 'nosniff',

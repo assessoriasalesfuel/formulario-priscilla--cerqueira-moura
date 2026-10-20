@@ -63,5 +63,5 @@ npm run sheets:verify
 - A API limita requisições com memória limitada, restringe o corpo a 32 KB e não devolve stack traces ou erros internos do parser.
 - CSP, `Permissions-Policy`, `Referrer-Policy`, `nosniff` e `Cache-Control: no-store` protegem a aplicação e as respostas da API.
 - Credenciais ficam somente no backend; `.env`, backups e artefatos estão ignorados.
-- UTMs e FBCLID utilizados são preservados sem carregar Pixel, fontes ou scripts de terceiros.
+- UTMs e FBCLID utilizados são preservados. O Meta Pixel `959018970525443` registra `PageView`, início, conclusão não duplicada de cada etapa e envio do formulário. O evento padrão `Lead` ocorre somente após o backend confirmar um qualificado encaminhável ao WhatsApp; `Contact` ocorre no clique desse botão. Respostas, nome e telefone não são enviados ao Meta.
 - O aviso atual permanece em `public/js/formConfig.js`; os dados formais de privacidade precisam ser preenchidos antes da publicação definitiva.
