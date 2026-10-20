@@ -1,107 +1,125 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createGoogleSheetsRepository, GoogleSheetsError } from '../server/googleSheets.js';
-import { COLUMN_COUNT, LEAD_HEADERS } from '../server/leadSchema.js';
+import {
+  createGoogleSheetsRepository, formatCrmDate, GoogleSheetsError, recordToRow,
+} from '../server/googleSheets.js';
+import { LEAD_HEADERS } from '../server/leadSchema.js';
 
 const environment = {
   GOOGLE_SHEET_ID: 'sheet-id',
   GOOGLE_SERVICE_ACCOUNT_EMAIL: 'service@example.test',
-  GOOGLE_PRIVATE_KEY: 'line-1\\nline-2',
+  GOOGLE_PRIVATE_KEY: 'key',
+};
+const record = {
+  leadId: 'id-1', submissionId: 'id-1', createdAt: new Date('2026-10-17T12:00:00Z'),
+  name: 'Pessoa de Teste', phone: '27999999999', status: 'Qualificado', priority: 'Alta',
+  operationalUrgency: 'Alta', legalSituation: 'Situação | Preocupação principal: Restrições',
+  caseAwarenessTime: '', lawyerSituation: '',
+  hiringIntent: 'Quero contratar uma advogada o quanto antes.', financialAvailability: 'Sim | À vista',
+  classificationReason: 'Motivo', contactConsent: 'Sim',
+  privacyAcknowledged: 'Sim', privacyNoticeVersion: 'v1', utmSource: 'facebook', fbclid: 'fb-id',
+  entryUrl: 'https://example.test/formulario', device: 'Mobile',
 };
 
-function leadRow(id) {
-  const row = Array(COLUMN_COUNT).fill('');
-  row[0] = id;
-  return row;
-}
-
-function createClient({ headers = LEAD_HEADERS } = {}) {
+function createClient({ headers = LEAD_HEADERS, rows } = {}) {
   const calls = [];
-  return {
-    calls,
-    spreadsheets: {
-      values: {
-        async append(options) {
-          calls.push(['append', options]);
-          return { data: { updates: { updatedRows: 1 } } };
-        },
-        async get(options) {
-          calls.push(['get', options]);
-          if (options.range === "'Leads'!A1:R1") return { data: { values: [headers] } };
-          return { data: { values: [['id-1', 'A'], ['id-2', 'B']] } };
-        },
-        async update(options) {
-          calls.push(['update', options]);
-          return { data: { updatedRows: 1 } };
-        },
-      },
+  const storedRows = rows ?? [recordToRow(record)];
+  return { calls, spreadsheets: { values: {
+    async append(options) { calls.push(['append', options]); return { data: { updates: { updatedRows: 1 } } }; },
+    async get(options) {
+      calls.push(['get', options]);
+      if (options.range === "'Leads'!A1:X1") return { data: { values: [headers] } };
+      if (options.range === "'Leads'!A2:A") {
+        return { data: { values: storedRows.map((row) => [row[0]]) } };
+      }
+      const match = options.range.match(/!E(\d+):E\d+$/u);
+      return { data: { values: match ? [[storedRows[Number(match[1]) - 2][4]]] : [] } };
     },
-  };
+  } } };
 }
 
-test('repositório do Sheets usa escrita RAW e somente a aba Leads', async () => {
+test('mapeia individualmente A:X e preserva vazios e metadados', () => {
+  const row = recordToRow(record);
+  assert.deepEqual(row, [
+    'id-1', '17/10/2026 09:00', 'Pessoa de Teste', '27999999999', 'Qualificado', 'Alta',
+    'Alta', 'Situação | Preocupação principal: Restrições', '', '',
+    'Quero contratar uma advogada o quanto antes.', 'Sim | À vista',
+    'Motivo', 'Sim', 'Sim', 'v1', 'facebook', '', '', '', '', 'fb-id',
+    'https://example.test/formulario', 'Mobile',
+  ]);
+  assert.equal(formatCrmDate('2026-10-17T02:30:00.000Z'), '16/10/2026 23:30');
+});
+
+test('mantém todas as posições quando campos opcionais estão vazios', () => {
+  const row = recordToRow({
+    ...record,
+    priority: '', operationalUrgency: '', caseAwarenessTime: '', lawyerSituation: '',
+    utmSource: '', utmMedium: '', utmCampaign: '', utmContent: '', utmTerm: '', fbclid: '',
+    entryUrl: '', device: '',
+  });
+  assert.equal(row.length, 24);
+  assert.equal(row[2], 'Pessoa de Teste');
+  assert.equal(row[3], '27999999999');
+  assert.equal(row[4], 'Qualificado');
+  assert.equal(row[7], 'Situação | Preocupação principal: Restrições');
+  assert.equal(row[8], '');
+  assert.equal(row[9], '');
+  assert.equal(row[10], 'Quero contratar uma advogada o quanto antes.');
+  assert.deepEqual(row.slice(16, 24), Array(8).fill(''));
+});
+
+test('repositório ancora append no cabeçalho A:X e envia 24 posições fixas', async () => {
   const client = createClient();
   const repository = createGoogleSheetsRepository({ environment, sheetsClient: client });
-  const row = leadRow('id-1');
-  row[1] = '=literal';
-  await repository.append(row);
+  await repository.append(record);
   const options = client.calls.find(([method]) => method === 'append')[1];
-  assert.equal(options.spreadsheetId, 'sheet-id');
-  assert.equal(options.range, "'Leads'!A2:R");
+  assert.equal(options.range, "'Leads'!A1:X1");
   assert.equal(options.valueInputOption, 'RAW');
+  assert.equal(options.requestBody.values[0].length, 24);
 });
 
-test('localiza linha por Lead ID sem aceitar índice do cliente', async () => {
-  const repository = createGoogleSheetsRepository({ environment, sheetsClient: createClient() });
-  const result = await repository.findByLeadId('id-2');
-  assert.equal(result.rowNumber, 3);
-  assert.equal(result.row.length, 18);
-  assert.deepEqual(result.row.slice(0, 2), ['id-2', 'B']);
-  assert.equal(await repository.findByLeadId('ausente'), null);
-});
-
-test('atualiza a faixa correspondente à linha localizada', async () => {
+test('localiza submissão e recupera os dados necessários à idempotência', async () => {
   const client = createClient();
   const repository = createGoogleSheetsRepository({ environment, sheetsClient: client });
-  await repository.update(7, leadRow('id-7'));
-  const options = client.calls.find(([method]) => method === 'update')[1];
-  assert.equal(options.range, "'Leads'!A7:R7");
-  assert.equal(options.valueInputOption, 'RAW');
+  const match = await repository.findBySubmissionId('id-1');
+  assert.deepEqual(match.record, {
+    leadId: 'id-1', submissionId: 'id-1', status: 'Qualificado',
+  });
+  assert.equal(await repository.findBySubmissionId('ausente'), null);
+  assert.ok(client.calls.some(([, options]) => options.range === "'Leads'!A2:A"));
+  assert.ok(client.calls.some(([, options]) => options.range === "'Leads'!E2:E2"));
+  assert.equal(client.calls.some(([, options]) => options.range === "'Leads'!A2:X"), false);
 });
 
-test('rejeita configuração ausente sem expor credenciais', async () => {
-  const repository = createGoogleSheetsRepository({ environment: {}, sheetsClient: createClient() });
+test('configuração ausente e schema divergente bloqueiam acesso', async () => {
   await assert.rejects(
-    () => repository.append(leadRow('id')),
-    (error) => error instanceof GoogleSheetsError && error.code === 'SHEETS_UNAVAILABLE',
+    () => createGoogleSheetsRepository({ environment: {}, sheetsClient: createClient() }).append(record),
+    GoogleSheetsError,
   );
-});
-
-test('bloqueia qualquer escrita quando o cabeçalho não corresponde ao schema A:R', async () => {
-  const headers = [...LEAD_HEADERS];
-  headers[3] = 'Prioridade';
+  const headers = [...LEAD_HEADERS]; headers[3] = 'Divergente';
   const client = createClient({ headers });
-  const repository = createGoogleSheetsRepository({ environment, sheetsClient: client });
   await assert.rejects(
-    () => repository.append(leadRow('id-1')),
-    (error) => error instanceof GoogleSheetsError && error.code === 'SHEETS_SCHEMA_MISMATCH',
+    () => createGoogleSheetsRepository({ environment, sheetsClient: client }).append(record),
+    (error) => error.code === 'SHEETS_SCHEMA_MISMATCH',
   );
   assert.equal(client.calls.some(([method]) => method === 'append'), false);
 });
 
-test('append e update rejeitam arrays diferentes de 18 células antes da escrita', async () => {
+test('valida o cabeçalho uma única vez por instância', async () => {
   const client = createClient();
   const repository = createGoogleSheetsRepository({ environment, sheetsClient: client });
-  await assert.rejects(() => repository.append(Array(30).fill('')), GoogleSheetsError);
-  await assert.rejects(() => repository.update(2, Array(17).fill('')), GoogleSheetsError);
-  assert.equal(client.calls.some(([method]) => method === 'append' || method === 'update'), false);
+  await repository.findBySubmissionId('id-1');
+  await repository.append(record);
+  assert.equal(client.calls.filter(([method, options]) => method === 'get'
+    && options.range === "'Leads'!A1:X1").length, 1);
 });
 
-test('valida o cabeçalho uma vez e reutiliza o resultado em operações posteriores', async () => {
+test('verifica a conexão somente por leitura e reutiliza a validação do schema', async () => {
   const client = createClient();
   const repository = createGoogleSheetsRepository({ environment, sheetsClient: client });
-  await repository.append(leadRow('id-1'));
-  await repository.update(2, leadRow('id-1'));
-  const headerReads = client.calls.filter(([, options]) => options.range === "'Leads'!A1:R1");
-  assert.equal(headerReads.length, 1);
+  assert.equal(await repository.verifyConnection(), true);
+  assert.equal(await repository.verifyConnection(), true);
+  assert.equal(client.calls.filter(([method, options]) => method === 'get'
+    && options.range === "'Leads'!A1:X1").length, 1);
+  assert.equal(client.calls.some(([method]) => method === 'append'), false);
 });

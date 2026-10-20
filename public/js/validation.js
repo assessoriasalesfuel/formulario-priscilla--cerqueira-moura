@@ -36,13 +36,3 @@ export function validatePhone(value) {
     error: valid ? '' : 'Informe um WhatsApp com DDD e 10 ou 11 dígitos.',
   };
 }
-
-export function normalizeEmail(value = '') {
-  return String(value).replace(/\s+/gu, '').toLowerCase();
-}
-
-export function validateEmail(value) {
-  const normalized = normalizeEmail(value);
-  const valid = normalized.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/u.test(normalized);
-  return { valid, value: normalized, error: valid ? '' : 'Informe um e-mail válido.' };
-}

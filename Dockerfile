@@ -8,7 +8,6 @@ RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
 
 COPY --chown=node:node server.js ./
 COPY --chown=node:node server ./server
-COPY --chown=node:node scripts ./scripts
 COPY --chown=node:node public ./public
 
 USER node

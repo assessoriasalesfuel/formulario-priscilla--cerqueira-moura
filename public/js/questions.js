@@ -1,24 +1,49 @@
-export const questions = [
+export const questions = Object.freeze([
   {
-    id: 'measureTime', type: 'choice', title: 'Quando você recebeu a medida protetiva?',
+    id: 'legalSituation', type: 'choice',
+    title: 'Qual é a sua situação atual?',
     options: [
-      ['less_than_1_month', 'Menos de 1 mês'],
-      ['from_1_to_3_months', '1 a 3 meses'],
-      ['from_3_to_6_months', '3 a 6 meses'],
-      ['more_than_6_months', 'Mais de 6 meses'],
+      ['protective_order_received', 'Já recebi uma medida protetiva contra mim.'],
+      ['protective_order_requested', 'Existe um pedido de medida protetiva contra mim.'],
+      ['protective_order_possible', 'Acredito que posso receber uma medida protetiva.'],
+      ['information_only', 'Quero apenas informações sobre o assunto.'],
+    ],
+    note: 'Não inclua relatos, nomes de terceiros, documentos ou informações íntimas neste formulário.',
+  },
+  {
+    id: 'primaryConcern', type: 'choice',
+    title: 'O que mais preocupa você nessa situação?',
+    options: [
+      ['restrictions_and_consequences', 'As restrições e consequências da medida protetiva.'],
+      ['how_to_act_and_rights', 'Não saber como agir ou quais são meus direitos.'],
+      ['situation_getting_worse', 'A possibilidade de a situação se agravar.'],
+      ['understand_how_it_works', 'Quero entender melhor como funciona.'],
     ],
   },
   {
-    id: 'investment', type: 'choice',
-    title: 'Você está preparado para investir em uma defesa profissional?',
+    id: 'hiringIntent', type: 'choice',
+    title: 'Quando pretende buscar assistência jurídica?',
     options: [
-      ['can_invest', 'Sim, consigo investir'],
-      ['needs_installments', 'Preciso parcelar, mas consigo'],
-      ['cannot_invest_now', 'Não consigo agora'],
+      ['asap', 'Quero contratar uma advogada o quanto antes.'],
+      ['within_7_days', 'Pretendo contratar nos próximos 7 dias.'],
+      ['evaluating', 'Ainda estou avaliando a contratação.'],
+      ['not_hiring_now', 'Não pretendo contratar neste momento.'],
     ],
   },
   {
-    id: 'phone', type: 'tel', title: 'Qual é o seu WhatsApp?', label: 'WhatsApp com DDD',
-    autocomplete: 'tel', inputMode: 'numeric', maxLength: 15, includesConsent: true,
+    id: 'paymentMethod', type: 'choice',
+    title: 'Qual condição de pagamento seria viável para você?',
+    options: [
+      ['cash', 'Tenho disponibilidade para pagar à vista, conforme os honorários apresentados.'],
+      ['installments_500', 'Consigo assumir parcelas a partir de R$ 500 mensais.'],
+      ['needs_values', 'Preciso conhecer os valores antes de confirmar.'],
+      ['not_available', 'Não tenho disponibilidade financeira atualmente.'],
+    ],
   },
-];
+  { id: 'contact', type: 'contact', title: 'Contato' },
+]);
+
+export const choiceCodes = Object.freeze(Object.fromEntries(
+  questions.filter(({ type }) => type === 'choice')
+    .map(({ id, options }) => [id, Object.freeze(options.map(([code]) => code))]),
+));

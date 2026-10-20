@@ -1,50 +1,40 @@
-export const LEAD_HEADERS = Object.freeze([
-  'Lead ID',
-  'Data de criação',
-  'Status',
-  'Tempo desde a medida protetiva',
-  'Disponibilidade para investir',
-  'WhatsApp',
-  'Motivo da classificação',
-  'Data de conclusão',
-  'Consentimento de dados',
-  'Autorização de contato',
-  'UTM Source',
-  'UTM Medium',
-  'UTM Campaign',
-  'UTM Content',
-  'UTM Term',
-  'FBCLID',
-  'URL de entrada',
-  'Dispositivo',
+export const LEAD_FIELDS = Object.freeze([
+  ['leadId', 'Lead ID'],
+  ['createdAt', 'Data de entrada'],
+  ['name', 'Nome completo'],
+  ['phone', 'WhatsApp'],
+  ['status', 'Status de qualificação'],
+  ['priority', 'Prioridade'],
+  ['operationalUrgency', 'Urgência'],
+  ['legalSituation', 'Situação atual'],
+  ['caseAwarenessTime', 'Tempo desde a ciência do caso'],
+  ['lawyerSituation', 'Situação com advogado'],
+  ['hiringIntent', 'Intenção de contratação'],
+  ['financialAvailability', 'Disponibilidade para contratação'],
+  ['classificationReason', 'Motivo da classificação'],
+  ['contactConsent', 'Autorização de contato'],
+  ['privacyAcknowledged', 'Ciência do aviso de privacidade'],
+  ['privacyNoticeVersion', 'Versão do aviso de privacidade'],
+  ['utmSource', 'UTM Source'],
+  ['utmMedium', 'UTM Medium'],
+  ['utmCampaign', 'UTM Campaign'],
+  ['utmContent', 'UTM Content'],
+  ['utmTerm', 'UTM Term'],
+  ['fbclid', 'FBCLID'],
+  ['entryUrl', 'URL de entrada'],
+  ['device', 'Dispositivo'],
 ]);
 
-export const LEAD_COLUMNS = Object.freeze({
-  leadId: 0,
-  createdAt: 1,
-  status: 2,
-  measureTime: 3,
-  investment: 4,
-  phone: 5,
-  reason: 6,
-  completedAt: 7,
-  dataConsent: 8,
-  contactConsent: 9,
-  utmSource: 10,
-  utmMedium: 11,
-  utmCampaign: 12,
-  utmContent: 13,
-  utmTerm: 14,
-  fbclid: 15,
-  entryUrl: 16,
-  device: 17,
-});
-
+export const LEAD_HEADERS = Object.freeze(LEAD_FIELDS.map(([, header]) => header));
+export const LEAD_COLUMNS = Object.freeze(Object.fromEntries(
+  LEAD_FIELDS.map(([key], index) => [key, index]),
+));
 export const COLUMN_COUNT = LEAD_HEADERS.length;
 export const LEAD_SHEET_NAME = 'Leads';
-export const LEAD_LAST_COLUMN = 'R';
+export const LEAD_LAST_COLUMN = 'X';
 export const LEAD_HEADER_RANGE = `'${LEAD_SHEET_NAME}'!A1:${LEAD_LAST_COLUMN}1`;
 export const LEAD_DATA_RANGE = `'${LEAD_SHEET_NAME}'!A2:${LEAD_LAST_COLUMN}`;
+export const LEAD_APPEND_RANGE = LEAD_HEADER_RANGE;
 
 export function hasCanonicalLeadHeaders(headers) {
   return Array.isArray(headers)

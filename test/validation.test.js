@@ -1,8 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  formatBrazilianPhone, normalizeEmail, normalizeName, normalizePhone,
-  validateEmail, validateName, validatePhone,
+  formatBrazilianPhone, normalizeName, normalizePhone, validateName, validatePhone,
 } from '../public/js/validation.js';
 
 test('normaliza nome, preservando acentos e removendo espaços duplicados', () => {
@@ -35,14 +34,4 @@ test('aceita WhatsApp com 11 dígitos', () => {
 test('rejeita WhatsApp inválido', () => {
   assert.equal(validatePhone('27 9873').valid, false);
   assert.equal(validatePhone('279987379441').valid, false);
-});
-
-test('normaliza e-mail removendo espaços e convertendo para minúsculas', () => {
-  assert.equal(normalizeEmail(' Nome@EXEMPLO.COM '), 'nome@exemplo.com');
-});
-
-test('valida formato de e-mail', () => {
-  assert.equal(validateEmail('pessoa@exemplo.com').valid, true);
-  assert.equal(validateEmail('pessoa@').valid, false);
-  assert.equal(validateEmail('sem-arroba.com').valid, false);
 });

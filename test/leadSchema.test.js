@@ -1,24 +1,20 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {
-  assertCanonicalLeadRow,
-  COLUMN_COUNT,
-  hasCanonicalLeadHeaders,
-  LEAD_COLUMNS,
-  LEAD_DATA_RANGE,
-  LEAD_HEADERS,
-  normalizeLeadRow,
-} from '../server/leadSchema.js';
+import { assertCanonicalLeadRow, COLUMN_COUNT, hasCanonicalLeadHeaders, LEAD_COLUMNS,
+  LEAD_APPEND_RANGE, LEAD_DATA_RANGE, LEAD_HEADERS, normalizeLeadRow } from '../server/leadSchema.js';
 
-test('schema canônico define exatamente 18 colunas de A até R', () => {
-  assert.equal(COLUMN_COUNT, 18);
-  assert.equal(LEAD_HEADERS.length, 18);
-  assert.equal(LEAD_DATA_RANGE, "'Leads'!A2:R");
+test('schema comercial define exatamente 24 colunas de A até X', () => {
+  assert.equal(COLUMN_COUNT, 24);
+  assert.equal(LEAD_HEADERS.length, 24);
+  assert.equal(LEAD_DATA_RANGE, "'Leads'!A2:X");
+  assert.equal(LEAD_APPEND_RANGE, "'Leads'!A1:X1");
   assert.deepEqual(LEAD_COLUMNS, {
-    leadId: 0, createdAt: 1, status: 2, measureTime: 3, investment: 4, phone: 5,
-    reason: 6, completedAt: 7, dataConsent: 8, contactConsent: 9,
-    utmSource: 10, utmMedium: 11, utmCampaign: 12, utmContent: 13, utmTerm: 14,
-    fbclid: 15, entryUrl: 16, device: 17,
+    leadId: 0, createdAt: 1, name: 2, phone: 3, status: 4, priority: 5,
+    operationalUrgency: 6, legalSituation: 7, caseAwarenessTime: 8, lawyerSituation: 9,
+    hiringIntent: 10, financialAvailability: 11, classificationReason: 12,
+    contactConsent: 13, privacyAcknowledged: 14, privacyNoticeVersion: 15,
+    utmSource: 16, utmMedium: 17, utmCampaign: 18, utmContent: 19, utmTerm: 20, fbclid: 21,
+    entryUrl: 22, device: 23,
   });
 });
 
@@ -30,10 +26,10 @@ test('validação exige cabeçalhos na ordem canônica', () => {
   assert.equal(hasCanonicalLeadHeaders([...LEAD_HEADERS, 'Extra']), false);
 });
 
-test('linhas de escrita exigem 18 células e leituras são normalizadas sem truncar excesso', () => {
-  assert.equal(assertCanonicalLeadRow(Array(18).fill('')).length, 18);
-  assert.throws(() => assertCanonicalLeadRow(Array(17).fill('')), /18 células/u);
-  assert.throws(() => assertCanonicalLeadRow(Array(23).fill('')), /18 células/u);
-  assert.equal(normalizeLeadRow(['id']).length, 18);
-  assert.throws(() => normalizeLeadRow(Array(23).fill('')), /no máximo 18/u);
+test('linhas exigem 24 células e leituras são normalizadas', () => {
+  assert.equal(assertCanonicalLeadRow(Array(24).fill('')).length, 24);
+  assert.throws(() => assertCanonicalLeadRow(Array(23).fill('')), /24 células/u);
+  assert.throws(() => assertCanonicalLeadRow(Array(25).fill('')), /24 células/u);
+  assert.equal(normalizeLeadRow(['id']).length, 24);
+  assert.throws(() => normalizeLeadRow(Array(25).fill('')), /no máximo 24/u);
 });

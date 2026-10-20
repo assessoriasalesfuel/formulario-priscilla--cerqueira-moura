@@ -1,84 +1,134 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
-import { createApp } from '../server.js';
+import { createApp, createRateLimiter } from '../server.js';
 import { createLeadService } from '../server/leadService.js';
+import { FORM_CONFIG } from '../public/js/formConfig.js';
 
-function createRepository() {
-  const rows = [];
+const ID = '20000000-0000-4000-8000-000000000002';
+function payload() {
   return {
-    rows,
-    async append(row) { rows.push([...row]); },
-    async findByLeadId(leadId) {
-      const index = rows.findIndex((row) => row[0] === leadId);
-      return index < 0 ? null : { rowNumber: index + 2, row: [...rows[index]] };
+    submissionId: ID, privacyNoticeVersion: FORM_CONFIG.privacyNoticeVersion, attribution: {},
+    answers: {
+      legalSituation: 'protective_order_received', primaryConcern: 'restrictions_and_consequences',
+      hiringIntent: 'asap', paymentMethod: 'cash',
+      name: 'Pessoa de Teste', phone: '27999999999',
+      privacyAcknowledged: true, contactConsent: true,
     },
-    async update(rowNumber, row) { rows[rowNumber - 2] = [...row]; },
   };
 }
 
-async function withServer(run) {
-  const repository = createRepository();
-  const service = createLeadService({
-    repository,
-    now: () => new Date('2026-09-18T12:00:00.000Z'),
-    createId: () => '10000000-0000-4000-8000-000000000001',
-  });
-  const server = createApp({ leadService: service }).listen(0, '127.0.0.1');
+async function withServer(run, { rateLimiter } = {}) {
+  const records = [];
+  const repository = {
+    records,
+    async append(record) { records.push({ ...record }); },
+    async findBySubmissionId(id) {
+      const index = records.findIndex((record) => record.submissionId === id);
+      return index < 0 ? null : { rowNumber: index + 2, record: records[index] };
+    },
+  };
+  const service = createLeadService({ repository, now: () => new Date('2026-10-16T12:00:00Z') });
+  const server = createApp({ leadService: service, rateLimiter }).listen(0, '127.0.0.1');
   await once(server, 'listening');
-  const { port } = server.address();
-  try {
-    await run(`http://127.0.0.1:${port}`, repository);
-  } finally {
-    await new Promise((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
-  }
+  try { await run(`http://127.0.0.1:${server.address().port}`, records); }
+  finally { await new Promise((resolve) => server.close(resolve)); }
 }
 
-const contact = { phone: '27998737944' };
-const answers = {
-  phone: '27998737944', measureTime: 'less_than_1_month', investment: 'can_invest',
-  dataConsent: true, contactConsent: true,
-};
-
-test('endpoints executam criação, atualização, conclusão e acesso ao WhatsApp', async () => {
-  await withServer(async (baseUrl, repository) => {
-    const createResponse = await fetch(`${baseUrl}/api/leads`, {
+test('API registra, classifica e retorna WhatsApp sem expor cabeçalhos do servidor', async () => {
+  await withServer(async (baseUrl, records) => {
+    const response = await fetch(`${baseUrl}/api/leads`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Idempotency-Key': 'browser-session' },
-      body: JSON.stringify(contact),
+      headers: { 'Content-Type': 'application/json', 'Idempotency-Key': ID },
+      body: JSON.stringify(payload()),
     });
-    assert.equal(createResponse.status, 201);
-    const { leadId } = await createResponse.json();
-
-    const updateResponse = await fetch(`${baseUrl}/api/leads/${leadId}`, {
-      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ measureTime: 'less_than_1_month' }),
-    });
-    assert.equal(updateResponse.status, 200);
-
-    const completeResponse = await fetch(`${baseUrl}/api/leads/${leadId}/complete`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(answers),
-    });
-    assert.deepEqual(await completeResponse.json(), {
-      classification: 'qualified', qualified: true, leadId,
-    });
-
-    const whatsappResponse = await fetch(`${baseUrl}/api/leads/${leadId}/whatsapp`, { method: 'POST' });
-    assert.equal(whatsappResponse.status, 200);
-    assert.match((await whatsappResponse.json()).link, /^https:\/\/wa\.me\/5527998737944/u);
-    assert.equal(repository.rows.length, 1);
+    assert.equal(response.status, 201);
+    assert.equal(response.headers.has('x-powered-by'), false);
+    assert.match(response.headers.get('content-security-policy'), /frame-ancestors 'none'/u);
+    assert.doesNotMatch(response.headers.get('content-security-policy'), /unsafe-inline|fonts\.googleapis/u);
+    assert.equal(response.headers.get('cache-control'), 'no-store');
+    assert.equal(response.headers.get('referrer-policy'), 'no-referrer');
+    assert.deepEqual((({ completionAction, whatsappEligible }) => (
+      { completionAction, whatsappEligible }
+    ))(await response.json()), { completionAction: 'whatsapp', whatsappEligible: true });
+    assert.equal(records.length, 1);
   });
 });
 
-test('API retorna erro JSON controlado sem stack trace', async () => {
+test('API retorna erro controlado e limita tentativas', async () => {
+  const limiter = createRateLimiter({ limit: 1, windowMs: 60_000, now: () => 0 });
+  await withServer(async (baseUrl) => {
+    const options = { method: 'POST', headers: { 'Content-Type': 'application/json', 'Idempotency-Key': ID }, body: JSON.stringify(payload()) };
+    assert.equal((await fetch(`${baseUrl}/api/leads`, options)).status, 201);
+    const limited = await fetch(`${baseUrl}/api/leads`, options);
+    assert.equal(limited.status, 429);
+    assert.deepEqual(Object.keys((await limited.json()).error), ['code', 'message']);
+  }, { rateLimiter: limiter });
+});
+
+test('API desconhecida retorna 404 em JSON', async () => {
+  await withServer(async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/api/legado`, { method: 'POST' });
+    assert.equal(response.status, 404);
+    assert.equal((await response.json()).error.code, 'NOT_FOUND');
+  });
+});
+
+test('estado da integração reflete a verificação real sem expor detalhes internos', async () => {
+  const service = { async submitLead() { throw new Error('não utilizado'); } };
+  const app = createApp({ leadService: service, integrationChecker: async () => undefined });
+  const server = app.listen(0, '127.0.0.1');
+  await once(server, 'listening');
+  try {
+    const response = await fetch(`http://127.0.0.1:${server.address().port}/api/integration-status`);
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), { googleSheets: 'operational' });
+  } finally { await new Promise((resolve) => server.close(resolve)); }
+});
+
+test('estado da integração informa indisponibilidade sem sucesso fictício', async () => {
+  const service = { async submitLead() { throw new Error('não utilizado'); } };
+  const unavailable = Object.assign(new Error('A integração com Google Sheets não está configurada.'),
+    { code: 'SHEETS_UNAVAILABLE' });
+  const app = createApp({ leadService: service, integrationChecker: async () => { throw unavailable; } });
+  const server = app.listen(0, '127.0.0.1');
+  await once(server, 'listening');
+  try {
+    const response = await fetch(`http://127.0.0.1:${server.address().port}/api/integration-status`);
+    assert.equal(response.status, 503);
+    assert.deepEqual(await response.json(), {
+      googleSheets: 'unavailable',
+      error: { code: 'SHEETS_UNAVAILABLE', message: 'A integração com Google Sheets não está configurada.' },
+    });
+  } finally { await new Promise((resolve) => server.close(resolve)); }
+});
+
+test('API rejeita JSON malformado sem expor detalhes do parser', async () => {
   await withServer(async (baseUrl) => {
     const response = await fetch(`${baseUrl}/api/leads`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}),
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{"incompleto":',
     });
     assert.equal(response.status, 400);
-    const body = await response.json();
-    assert.equal(body.error.code, 'INVALID_REQUEST');
-    assert.equal('stack' in body.error, false);
-    assert.equal(response.headers.has('x-powered-by'), false);
+    assert.deepEqual(await response.json(), {
+      error: { code: 'INVALID_JSON', message: 'O corpo da solicitação deve conter JSON válido.' },
+    });
   });
+});
+
+test('limitador mantém quantidade máxima de clientes em memória', () => {
+  const limiter = createRateLimiter({ maxClients: 1, now: () => 0 });
+  const responses = [];
+  const response = {
+    set() { return this; },
+    status(statusCode) { this.statusCode = statusCode; return this; },
+    json(body) { responses.push({ statusCode: this.statusCode, body }); },
+  };
+  let accepted = 0;
+  limiter({ ip: 'primeiro' }, response, () => { accepted += 1; });
+  limiter({ ip: 'segundo' }, response, () => { accepted += 1; });
+  assert.equal(accepted, 1);
+  assert.deepEqual(responses, [{
+    statusCode: 429,
+    body: { error: { code: 'RATE_LIMITED', message: 'Muitas tentativas. Aguarde e tente novamente.' } },
+  }]);
 });
