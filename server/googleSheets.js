@@ -4,8 +4,10 @@ import path from 'node:path';
 import {
   assertCanonicalLeadRow,
   hasCanonicalLeadHeaders,
-  LEAD_APPEND_RANGE,
+  LEAD_LAST_COLUMN,
   LEAD_HEADER_RANGE,
+  LEAD_SHEET_NAME,
+  normalizeLeadRow,
 } from './leadSchema.js';
 
 const projectDirectory = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -115,21 +117,67 @@ export function createGoogleSheetsRepository({ environment = process.env, sheets
 
   async function validateSchema({ client: sheets, spreadsheetId: id }) {
     if (!schemaValidation) {
-      schemaValidation = sheets.spreadsheets.values.get({ spreadsheetId: id, range: LEAD_HEADER_RANGE })
-        .then((response) => {
-          if (!hasCanonicalLeadHeaders(response.data.values?.[0] ?? [])) {
+      schemaValidation = Promise.all([
+        sheets.spreadsheets.values.get({ spreadsheetId: id, range: LEAD_HEADER_RANGE }),
+        sheets.spreadsheets.get({
+          spreadsheetId: id,
+          fields: 'sheets.properties(sheetId,title)',
+        }),
+      ]).then(([headerResponse, metadataResponse]) => {
+          if (!hasCanonicalLeadHeaders(headerResponse.data.values?.[0] ?? [])) {
             throw new GoogleSheetsError(
               'O cabeçalho da aba Leads não corresponde ao schema comercial esperado de 24 colunas.',
               undefined,
               'SHEETS_SCHEMA_MISMATCH',
             );
           }
+          const matches = (metadataResponse.data.sheets ?? [])
+            .filter(({ properties }) => properties?.title === LEAD_SHEET_NAME);
+          const sheetId = matches[0]?.properties?.sheetId;
+          if (matches.length !== 1 || !Number.isInteger(sheetId)) {
+            throw new GoogleSheetsError('A aba Leads não foi encontrada de forma única.', undefined, 'SHEETS_SCHEMA_MISMATCH');
+          }
+          return { sheetId };
         }).catch((error) => {
           schemaValidation = undefined;
           throw error;
         });
     }
     await schemaValidation;
+    return schemaValidation;
+  }
+
+  async function verifyWrittenRow(context, expectedRow) {
+    const idResponse = await context.client.spreadsheets.values.get({
+      spreadsheetId: context.spreadsheetId,
+      range: `'${LEAD_SHEET_NAME}'!A2:A`,
+    });
+    const matchingRows = (idResponse.data.values ?? [])
+      .map((values, index) => ({ leadId: values[0], rowNumber: index + 2 }))
+      .filter(({ leadId }) => leadId === expectedRow[0]);
+    if (matchingRows.length !== 1) {
+      throw new GoogleSheetsError(
+        'O Google Sheets não confirmou o Lead ID uma única vez na coluna A.',
+        undefined,
+        'SHEETS_WRITE_MISMATCH',
+      );
+    }
+    const rowNumber = matchingRows[0].rowNumber;
+    const effectiveRange = `'${LEAD_SHEET_NAME}'!A${rowNumber}:${LEAD_LAST_COLUMN}${rowNumber}`;
+    const rowResponse = await context.client.spreadsheets.values.get({
+      spreadsheetId: context.spreadsheetId,
+      range: effectiveRange,
+      valueRenderOption: 'FORMATTED_VALUE',
+    });
+    const writtenRow = normalizeLeadRow(rowResponse.data.values?.[0] ?? []);
+    if (JSON.stringify(writtenRow) !== JSON.stringify(expectedRow)) {
+      throw new GoogleSheetsError(
+        'A linha gravada no Google Sheets não corresponde ao contrato A:X.',
+        undefined,
+        'SHEETS_WRITE_MISMATCH',
+      );
+    }
+    return { rowNumber, updatedRange: effectiveRange };
   }
 
   async function findBySubmissionId(submissionId) {
@@ -162,17 +210,23 @@ export function createGoogleSheetsRepository({ environment = process.env, sheets
     },
     async append(record) {
       return execute(async (context) => {
-        await validateSchema(context);
-        const response = await context.client.spreadsheets.values.append({
+        const { sheetId } = await validateSchema(context);
+        const row = recordToRow(record);
+        await context.client.spreadsheets.batchUpdate({
           spreadsheetId: context.spreadsheetId,
-          range: LEAD_APPEND_RANGE,
-          valueInputOption: 'RAW',
-          insertDataOption: 'INSERT_ROWS',
-          requestBody: { values: [recordToRow(record)] },
+          requestBody: {
+            requests: [{
+              appendCells: {
+                sheetId,
+                rows: [{
+                  values: row.map((value) => ({ userEnteredValue: { stringValue: value } })),
+                }],
+                fields: 'userEnteredValue',
+              },
+            }],
+          },
         });
-        if (response.data.updates?.updatedRows !== 1) {
-          throw new GoogleSheetsError('O Google Sheets não confirmou a criação do lead.');
-        }
+        return verifyWrittenRow(context, row);
       });
     },
     findBySubmissionId,

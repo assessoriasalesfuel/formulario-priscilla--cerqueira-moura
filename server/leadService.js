@@ -159,6 +159,7 @@ export function createLeadService({ repository, now = () => new Date() } = {}) {
     try {
       await repository.append(record);
     } catch (error) {
+      if (error?.code === 'SHEETS_WRITE_MISMATCH') throw error;
       const recovered = await repository.findBySubmissionId(validated.submissionId).catch(() => null);
       if (recovered) return responseFromRecord(recovered.record);
       throw error;

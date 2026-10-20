@@ -34,7 +34,6 @@ export const LEAD_SHEET_NAME = 'Leads';
 export const LEAD_LAST_COLUMN = 'X';
 export const LEAD_HEADER_RANGE = `'${LEAD_SHEET_NAME}'!A1:${LEAD_LAST_COLUMN}1`;
 export const LEAD_DATA_RANGE = `'${LEAD_SHEET_NAME}'!A2:${LEAD_LAST_COLUMN}`;
-export const LEAD_APPEND_RANGE = LEAD_HEADER_RANGE;
 
 export function hasCanonicalLeadHeaders(headers) {
   return Array.isArray(headers)

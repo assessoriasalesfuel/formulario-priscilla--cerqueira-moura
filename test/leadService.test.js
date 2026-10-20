@@ -113,3 +113,13 @@ test('protege fórmulas e reconcilia falha após append', async () => {
   assert.equal(result.leadId, ID);
   assert.equal(recovered.repository.records.length, 1);
 });
+
+test('não mascara divergência confirmada na linha gravada', async () => {
+  const mismatched = setup();
+  mismatched.repository.append = async function appendMisaligned(record) {
+    this.records.push({ ...record });
+    throw Object.assign(new Error('linha deslocada'), { code: 'SHEETS_WRITE_MISMATCH' });
+  };
+  await assert.rejects(() => mismatched.service.submitLead(validPayload(), ID),
+    (error) => error.code === 'SHEETS_WRITE_MISMATCH');
+});

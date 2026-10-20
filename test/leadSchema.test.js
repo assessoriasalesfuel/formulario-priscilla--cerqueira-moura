@@ -1,13 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { assertCanonicalLeadRow, COLUMN_COUNT, hasCanonicalLeadHeaders, LEAD_COLUMNS,
-  LEAD_APPEND_RANGE, LEAD_DATA_RANGE, LEAD_HEADERS, normalizeLeadRow } from '../server/leadSchema.js';
+  LEAD_DATA_RANGE, LEAD_HEADERS, normalizeLeadRow } from '../server/leadSchema.js';
 
 test('schema comercial define exatamente 24 colunas de A até X', () => {
   assert.equal(COLUMN_COUNT, 24);
   assert.equal(LEAD_HEADERS.length, 24);
   assert.equal(LEAD_DATA_RANGE, "'Leads'!A2:X");
-  assert.equal(LEAD_APPEND_RANGE, "'Leads'!A1:X1");
   assert.deepEqual(LEAD_COLUMNS, {
     leadId: 0, createdAt: 1, name: 2, phone: 3, status: 4, priority: 5,
     operationalUrgency: 6, legalSituation: 7, caseAwarenessTime: 8, lawyerSituation: 9,
