@@ -25,14 +25,31 @@ function readConfiguration(environment) {
   const spreadsheetId = environment.GOOGLE_SHEET_ID?.trim();
   const clientEmail = environment.GOOGLE_SERVICE_ACCOUNT_EMAIL?.trim();
   const privateKey = environment.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n');
+  const encodedCredentials = environment.GOOGLE_SERVICE_ACCOUNT_JSON_BASE64?.trim();
   const configuredCredentialsFile = environment.GOOGLE_APPLICATION_CREDENTIALS?.trim();
   const credentialsFile = configuredCredentialsFile
     ? path.resolve(projectDirectory, configuredCredentialsFile)
     : undefined;
-  if (!spreadsheetId || (!credentialsFile && (!clientEmail || !privateKey))) {
+  let credentials;
+  if (encodedCredentials) {
+    try {
+      const parsed = JSON.parse(Buffer.from(encodedCredentials, 'base64').toString('utf8'));
+      if (parsed.type !== 'service_account' || !parsed.client_email || !parsed.private_key) throw new Error('Invalid credentials');
+      credentials = { client_email: parsed.client_email.trim(), private_key: parsed.private_key.replace(/\\n/g, '\n') };
+    } catch (error) {
+      throw new GoogleSheetsError(
+        'A credencial Google codificada no ambiente é inválida.',
+        error,
+        'SHEETS_CONFIG_INVALID',
+      );
+    }
+  } else if (clientEmail && privateKey) {
+    credentials = { client_email: clientEmail, private_key: privateKey };
+  }
+  if (!spreadsheetId || (!credentialsFile && !credentials)) {
     throw new GoogleSheetsError('A integração com Google Sheets não está configurada.');
   }
-  return { spreadsheetId, clientEmail, privateKey, credentialsFile };
+  return { spreadsheetId, credentials, credentialsFile };
 }
 
 export function formatCrmDate(value, timeZone = 'America/Sao_Paulo') {
@@ -98,7 +115,7 @@ export function createGoogleSheetsRepository({ environment = process.env, sheets
       const auth = new google.auth.GoogleAuth({
         ...(configuration.credentialsFile
           ? { keyFile: configuration.credentialsFile }
-          : { credentials: { client_email: configuration.clientEmail, private_key: configuration.privateKey } }),
+          : { credentials: configuration.credentials }),
         scopes: ['https://www.googleapis.com/auth/spreadsheets'],
       });
       client = google.sheets({ version: 'v4', auth });

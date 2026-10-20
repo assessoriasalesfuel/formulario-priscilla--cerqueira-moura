@@ -147,6 +147,26 @@ test('configuração ausente e schema divergente bloqueiam acesso', async () => 
   assert.equal(client.calls.some(([method]) => method === 'batchUpdate'), false);
 });
 
+test('aceita credencial JSON em Base64 e rejeita conteúdo inválido', async () => {
+  const encoded = Buffer.from(JSON.stringify({
+    type: 'service_account',
+    client_email: 'service@example.test',
+    private_key: '-----BEGIN PRIVATE KEY-----\nkey\n-----END PRIVATE KEY-----\n',
+  })).toString('base64');
+  const repository = createGoogleSheetsRepository({
+    environment: { GOOGLE_SHEET_ID: 'sheet-id', GOOGLE_SERVICE_ACCOUNT_JSON_BASE64: encoded },
+    sheetsClient: createClient(),
+  });
+  assert.equal(await repository.verifyConnection(), true);
+  await assert.rejects(
+    () => createGoogleSheetsRepository({
+      environment: { GOOGLE_SHEET_ID: 'sheet-id', GOOGLE_SERVICE_ACCOUNT_JSON_BASE64: 'invalid' },
+      sheetsClient: createClient(),
+    }).verifyConnection(),
+    (error) => error.code === 'SHEETS_CONFIG_INVALID',
+  );
+});
+
 test('valida o cabeçalho uma única vez por instância', async () => {
   const client = createClient({ rows: [] });
   const repository = createGoogleSheetsRepository({ environment, sheetsClient: client });
